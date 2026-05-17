@@ -73,13 +73,6 @@ For any change to `install.sh`, `install.ps1`, `doctor.*`, or `uninstall.*`:
 - Backups before mutating `settings.json` are mandatory.
 - Hooks must remain idempotent on reinstall.
 
-## Placeholders to leave alone
-
-These are intentionally unfilled in the public repo. Do not replace them:
-
-- `LICENSE` — the `[YOUR NAME]` placeholder.
-- `README.md` and `README.ko.md` — the `YOUR-USERNAME` placeholder.
-
 ## Documentation tone
 
 Avoid overclaiming. The following phrases are banned in docs and scripts:

@@ -74,7 +74,7 @@ Vibekit installs the local Claude Code commands automatically, then checks optio
 
 **macOS / Linux / WSL:**
 ```bash
-git clone https://github.com/YOUR-USERNAME/claude-codex-vibekit.git
+git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
 cd claude-codex-vibekit
 ./install.sh --mode safe
 ./doctor.sh
@@ -82,7 +82,7 @@ cd claude-codex-vibekit
 
 **Windows PowerShell:**
 ```powershell
-git clone https://github.com/YOUR-USERNAME/claude-codex-vibekit.git
+git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
 cd claude-codex-vibekit
 .\install.ps1 -Mode safe
 .\doctor.ps1
@@ -270,3 +270,7 @@ Built on top of incredible open-source work:
 - [compound-engineering-plugin](https://github.com/EveryInc/compound-engineering-plugin) by EveryInc
 
 Inspired by [andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills).
+
+---
+
+Maintained by [Jaehwan Ha](https://www.linkedin.com/in/%EC%9E%AC%ED%99%98-%ED%95%98-18a05238b/).
