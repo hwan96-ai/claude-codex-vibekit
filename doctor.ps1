@@ -2,7 +2,10 @@
 # Exit codes: 0 = READY, 1 = PARTIAL, 2 = ACTION REQUIRED
 
 [CmdletBinding()]
-param()
+param(
+    [switch]$Fix,
+    [switch]$Yes
+)
 
 $ErrorActionPreference = "Continue"
 
@@ -177,6 +180,64 @@ for event, needle, label in checks:
     Remove-Item $tmp.FullName -Force -ErrorAction SilentlyContinue
 } else {
     WARN "skipped (no settings.json or no python)"
+}
+
+if ($Fix) {
+    Write-Host "`n[-Fix] Attempting safe automatic fixes" -ForegroundColor Cyan
+    Write-Host "Only tools with clear CLI installation flows are auto-installed." -ForegroundColor DarkGray
+
+    function Confirm-Fix($prompt) {
+        if ($Yes) { return $true }
+        $ans = Read-Host "  $prompt [y/N]"
+        return ($ans -match '^(y|Y|yes|YES)$')
+    }
+
+    $fxAuto   = New-Object System.Collections.ArrayList
+    $fxSkip   = New-Object System.Collections.ArrayList
+    $fxManual = New-Object System.Collections.ArrayList
+    $fxFail   = New-Object System.Collections.ArrayList
+
+    $gstackDir = Join-Path $ClaudeHome "skills\gstack"
+    if (Test-Path $gstackDir) {
+        [void]$fxSkip.Add("gstack (already installed)")
+    } elseif (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        [void]$fxFail.Add("gstack: git missing")
+    } elseif (Confirm-Fix "Clone gstack into $gstackDir and run setup?") {
+        New-Item -ItemType Directory -Path (Join-Path $ClaudeHome "skills") -Force | Out-Null
+        & git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git $gstackDir
+        if ($LASTEXITCODE -eq 0) {
+            $setupPath = Join-Path $gstackDir "setup"
+            if (Test-Path $setupPath) {
+                Push-Location $gstackDir
+                try {
+                    $bash = Get-Command bash -ErrorAction SilentlyContinue
+                    if ($bash) { & bash ./setup } else { & $setupPath }
+                    if ($LASTEXITCODE -eq 0) { [void]$fxAuto.Add("gstack") }
+                    else { [void]$fxFail.Add("gstack setup: cd $gstackDir; bash ./setup") }
+                } finally { Pop-Location }
+            } else {
+                [void]$fxManual.Add("gstack: cd $gstackDir; .\setup (no setup script auto-detected)")
+            }
+        } else {
+            [void]$fxFail.Add("gstack clone: git clone https://github.com/garrytan/gstack.git `"$gstackDir`"")
+        }
+    } else {
+        [void]$fxSkip.Add("gstack (declined)")
+    }
+
+    [void]$fxManual.Add("BMAD: run 'npx bmad-method install' inside your target project")
+    [void]$fxManual.Add("superpowers: /plugin marketplace add obra/superpowers-marketplace then /plugin install superpowers@superpowers-marketplace")
+    [void]$fxManual.Add("compound-engineering: install via Claude Code or Codex /plugins TUI")
+    if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
+        [void]$fxManual.Add("codex (optional): npm install -g @openai/codex")
+    }
+
+    Write-Host "`n[-Fix] Report" -ForegroundColor Cyan
+    if ($fxAuto.Count   -gt 0) { Write-Host "  installed:" -ForegroundColor Green;     $fxAuto   | ForEach-Object { Write-Host "    - $_" } }
+    if ($fxSkip.Count   -gt 0) { Write-Host "  skipped:"   -ForegroundColor DarkGray;  $fxSkip   | ForEach-Object { Write-Host "    - $_" } }
+    if ($fxManual.Count -gt 0) { Write-Host "  manual:"    -ForegroundColor Yellow;    $fxManual | ForEach-Object { Write-Host "    - $_" } }
+    if ($fxFail.Count   -gt 0) { Write-Host "  failures:"  -ForegroundColor Red;       $fxFail   | ForEach-Object { Write-Host "    - $_" } }
+    Write-Host "Re-run doctor.ps1 (without -Fix) to see updated status." -ForegroundColor DarkGray
 }
 
 Write-Host ""

@@ -70,7 +70,7 @@ Vibekit은 로컬 Claude Code 커맨드를 설치하고, 선택적 통합들을 
 
 **macOS / Linux / WSL:**
 ```bash
-git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
+git clone https://github.com/YOUR-USERNAME/claude-codex-vibekit.git
 cd claude-codex-vibekit
 ./install.sh --mode safe
 ./doctor.sh
@@ -78,7 +78,7 @@ cd claude-codex-vibekit
 
 **Windows PowerShell:**
 ```powershell
-git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
+git clone https://github.com/YOUR-USERNAME/claude-codex-vibekit.git
 cd claude-codex-vibekit
 .\install.ps1 -Mode safe
 .\doctor.ps1
@@ -98,7 +98,7 @@ cd claude-codex-vibekit
 |------|------|
 | `commands-only` | 가장 안전. 슬래시 커맨드만 복사. 훅 없음. `settings.json` 손 안 댐. |
 | `safe` (권장) | `commands-only` + 훅 복사 + 안전 훅만 활성화 (위험 git 차단, 세션 시작 브랜치 분기). auto-commit 켜지 **않습니다**. |
-| `full` | `safe` + auto-save / auto-commit 활성화. 현재 auto-save 훅은 `git add -A`를 실행해서 워킹 트리의 관련 없는 변경까지 스테이징할 수 있습니다. 파워 유저용; 설치 스크립트가 먼저 경고합니다. |
+| `full` | `safe` + auto-save / auto-commit 활성화. v0.1.1부터 훅은 `main`/`master`, 위험한 파일(`.env`, 키류, `~/.claude/settings.json`), 시크릿 패턴, 삭제 변경, 30개 초과 변경 시 커밋을 거부합니다. 그 모든 체크를 통과해도 여전히 `git add -A`를 실행해서 워킹 트리의 관련 없는 변경까지 스테이징할 수 있습니다. 파워 유저용; 설치 스크립트가 먼저 경고합니다. |
 
 > **글로벌 훅 주의.** `safe`나 `full` 모드에서 설치되는 훅은 `~/.claude`에 있어서 이 사용자 계정의 **모든** Claude Code 세션에 적용됩니다. 이 프로젝트에서만 격리하고 싶으면 `commands-only`를 쓰세요.
 
@@ -123,12 +123,42 @@ cd claude-codex-vibekit
 
 `doctor.sh` / `doctor.ps1`이 설치 여부와 설치 방법을 알려줍니다:
 
-- **gstack** — Claude Code 안에서 직접 설치하거나 `~/.claude/skills/gstack`에 클론
-- **BMAD** — 프로젝트마다 `npx bmad-method install`
-- **superpowers**, **compound-engineering** — Claude Code의 `/plugins` UI로 설치
-- **Codex CLI** — `npm install -g @openai/codex`
+- **gstack** — `~/.claude/skills/gstack`에 클론 (또는 `--bootstrap` 사용)
+- **BMAD** — 프로젝트마다 `npx bmad-method install` (항상 수동, 프로젝트별)
+- **superpowers**, **compound-engineering** — Claude Code의 `/plugins` UI로 설치 (항상 수동)
+- **Codex CLI** — `npm install -g @openai/codex` (또는 `--bootstrap --bootstrap-codex`)
 
 doctor는 `READY`, `PARTIAL`, `ACTION REQUIRED` 중 하나로 끝납니다.
+
+### Opt-in 부트스트랩 (v0.1.1 신규)
+
+기본 설치는 외부 도구를 절대 건드리지 않습니다. `--bootstrap`
+(PowerShell은 `-Bootstrap`)을 명시적으로 넘기면 안전한 자동 설치를
+시도합니다:
+
+```bash
+./install.sh --mode safe --bootstrap                  # 대화형
+./install.sh --mode safe --bootstrap --yes            # 비대화형
+./install.sh --mode safe --bootstrap --bootstrap-codex
+```
+```powershell
+.\install.ps1 -Mode safe -Bootstrap
+.\install.ps1 -Mode safe -Bootstrap -Yes
+.\install.ps1 -Mode safe -Bootstrap -BootstrapCodex
+```
+
+자동 설치 대상: **gstack** 클론+setup, 그리고 `--bootstrap-codex` 시
+`npm install -g @openai/codex`. 자동 설치 불가: **BMAD**(프로젝트별),
+**superpowers** / **compound-engineering**(Claude Code 플러그인 UI 필요).
+이들은 정확한 명령어와 함께 수동 단계로 안내됩니다.
+
+기존 설치에는 `doctor --fix` / `doctor -Fix`로 같은 패스를 돌릴 수
+있습니다:
+
+```bash
+./doctor.sh --fix
+.\doctor.ps1 -Fix
+```
 
 ## 4개 게이트
 
@@ -174,7 +204,7 @@ Vibekit이 하는 것과 안 하는 것.
 - `~/.claude/settings.json`은 수정 전 항상 백업
 
 **`--mode full`에서 추가:**
-- 파일 수정 후 auto-save / auto-commit. 현재 훅은 `git add -A`로 워킹 트리 전체를 스테이징해서 관련 없는 변경까지 같이 커밋합니다. 설치 스크립트가 먼저 명시적으로 경고합니다. 이 동작이 본인 워크플로우와 안 맞으면 `safe` 또는 `commands-only`에 머무르세요.
+- 파일 수정 후 auto-save / auto-commit. 훅은 `main`/`master`, 위험 파일(`.env`, `*.pem`, `*.key`, `~/.claude/settings.json` 등), 시크릿 패턴(`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `BEGIN PRIVATE KEY`, `sk-…`), 삭제 변경(`HWAN_AUTOSAVE_ALLOW_DELETIONS=1`로 허용), `HWAN_AUTOSAVE_MAX_FILES`(기본 30) 초과 시 커밋을 거부합니다. 통과해도 여전히 `git add -A`로 워킹 트리 전체를 스테이징해서 관련 없는 변경까지 같이 커밋할 수 있습니다. 설치 스크립트가 먼저 명시적으로 경고합니다. 끄려면 `HWAN_AUTOSAVE_DISABLE=1` 또는 `safe`/`commands-only`로 다시 설치하세요.
 
 테스트 검증, 롤백, TDD 우선, 프로젝트별 학습 노트는 기반 스킬들(gstack, BMAD, superpowers, compound-engineering)에서 옵니다 — doctor가 알려주는 대로 따로 설치하세요.
 
@@ -234,7 +264,3 @@ MIT. 자유롭게 사용.
 - [compound-engineering-plugin](https://github.com/EveryInc/compound-engineering-plugin) — EveryInc
 
 영감: [andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills).
-
----
-
-Maintainer: [Jaehwan Ha](https://www.linkedin.com/in/%EC%9E%AC%ED%99%98-%ED%95%98-18a05238b/)
