@@ -40,16 +40,33 @@ Existing files in `~/.claude/commands` that are not in the list above are not to
 | `safe` | yes | `PreToolUse:Bash` (block dangerous git) and `SessionStart` (branch safety) | low — hooks only block clearly dangerous git operations and create a working branch |
 | `full` | yes | `safe` + `PostToolUse:Edit|Write|MultiEdit` (auto-save / auto-commit) | medium — automatic commits will be created after file changes |
 
-`full` mode enables **auto-save / auto-commit**. After Claude Code edits a file, the `auto-save.sh` hook runs:
+`full` mode enables **auto-save / auto-commit**. After Claude Code edits a file, the `auto-save.sh` hook runs a series of safeguards and, only if all of them pass, commits with `git add -A`.
+
+The hook refuses to commit if any of these are true:
+
+- not inside a git work tree
+- current branch is `main`/`master`
+- the change set includes risky filenames: `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa`, `id_ed25519`, `.claude/settings.json`, `.claude/settings.local.json`
+- the diff (staged, unstaged, or untracked file contents) contains obvious secret patterns: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `BEGIN PRIVATE KEY`, `sk-…`
+- the change set is larger than `HWAN_AUTOSAVE_MAX_FILES` (default 30)
+- any files were deleted, unless `HWAN_AUTOSAVE_ALLOW_DELETIONS=1`
+
+On pass, the hook prints a short summary (branch, file count, paths) and then runs:
 
 ```
 git add -A
-git commit -m "autosave: <timestamp>"
+git commit -m "autosave: claude changes <timestamp>"
 ```
 
-on the current branch. It refuses to commit on `main` or `master`, but it otherwise stages **the entire working tree, including files Claude Code did not touch** (build artifacts, scratch files, in-progress changes from other tools). This can create many commits and may capture more than you intended.
+**Even with all those checks, the commit still stages the entire working tree** (including files Claude Code did not touch — build artifacts, scratch files, in-progress changes from other tools). The safeguards reduce the worst cases; they do not change the fundamental tradeoff. If you keep `full` mode enabled, work on a clean working tree or move scratch files outside the repo. If that does not fit your workflow, choose `safe` (recommended) or `commands-only`. The installer prints an explicit warning before enabling `full`.
 
-If you keep `full` mode enabled, work on a clean working tree or move scratch files outside the repo. If that does not fit your workflow, choose `safe` (recommended) or `commands-only`. The installer prints an explicit warning before enabling `full`.
+Kill switch and tuning (environment variables read by `auto-save.sh`):
+
+| Variable | Effect |
+|----------|--------|
+| `HWAN_AUTOSAVE_DISABLE=1` | Hook exits immediately, never commits. |
+| `HWAN_AUTOSAVE_MAX_FILES=N` | Override the 30-file cap. |
+| `HWAN_AUTOSAVE_ALLOW_DELETIONS=1` | Allow commits that delete files. |
 
 ### Global hook scope
 
@@ -61,7 +78,7 @@ Hooks live in `~/.claude/hooks` and are wired up through `~/.claude/settings.jso
 - Never creates pull requests.
 - Never merges branches.
 - Never deploys.
-- Never installs Claude Code, Node.js, gstack, BMAD, superpowers, compound-engineering, or Codex automatically. It only prints exact instructions for each.
+- Never installs Claude Code, Node.js, gstack, BMAD, superpowers, compound-engineering, or Codex without opt-in. By default the installer only prints exact instructions. `--bootstrap` / `-Bootstrap` (and the matching `doctor --fix` / `-Fix`) is an explicit opt-in that may clone gstack and run its `./setup`; `--bootstrap-codex` / `-BootstrapCodex` additionally allows a global `npm install -g @openai/codex`. BMAD, superpowers, and compound-engineering remain manual even in bootstrap mode — BMAD because it is project-local, the plugins because they must go through Claude Code's plugin UI.
 - Never silently enables auto-commit. You must pick `--mode full` explicitly.
 - Never overwrites unrelated keys in your `settings.json`.
 - Never deletes user commands or hooks it did not place.

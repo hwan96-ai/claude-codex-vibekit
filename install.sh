@@ -19,6 +19,9 @@ NC='\033[0m'
 
 MODE=""
 INSTALL_CLAUDE=0
+BOOTSTRAP=0
+BOOTSTRAP_YES=0
+BOOTSTRAP_CODEX=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -31,12 +34,21 @@ while [ $# -gt 0 ]; do
     --install-claude)
       INSTALL_CLAUDE=1; shift
       ;;
+    --bootstrap)
+      BOOTSTRAP=1; shift
+      ;;
+    --bootstrap-yes|--yes)
+      BOOTSTRAP=1; BOOTSTRAP_YES=1; shift
+      ;;
+    --bootstrap-codex)
+      BOOTSTRAP_CODEX=1; shift
+      ;;
     -h|--help)
       cat <<EOF
 Claude-Codex Vibekit installer
 
 Usage:
-  $0 --mode <commands-only|safe|full>
+  $0 --mode <commands-only|safe|full> [--bootstrap [--yes] [--bootstrap-codex]]
 
 Modes:
   commands-only  Copy slash commands only. No hooks. No settings.json changes.
@@ -46,6 +58,11 @@ Modes:
   full           safe + enable auto-save / auto-commit hook. Power-user mode.
 
 Flags:
+  --bootstrap        Opt-in: attempt safe automatic install of supported
+                     external deps (gstack). Prints guidance for the rest
+                     (BMAD, superpowers, compound-engineering).
+  --yes              Non-interactive bootstrap (implies --bootstrap).
+  --bootstrap-codex  Also attempt 'npm install -g @openai/codex'.
   --install-claude   Reserved. Currently prints guidance only.
   -h, --help         Show this help.
 EOF
@@ -246,8 +263,104 @@ else
   echo -e "    Install: curl -fsSL https://claude.ai/install.sh | bash"
 fi
 
+# ---------- 6. Bootstrap (opt-in only) ----------
+if [ "$BOOTSTRAP" -eq 1 ]; then
+  echo -e "\n${CYAN}[6] Bootstrap (opt-in)${NC}"
+
+  BS_AUTO=()
+  BS_SKIP=()
+  BS_MANUAL=()
+  BS_FAIL=()
+
+  confirm() {
+    # $1 = prompt
+    if [ "$BOOTSTRAP_YES" -eq 1 ]; then return 0; fi
+    printf "  %s [y/N] " "$1"
+    read -r _a
+    case "$_a" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+  }
+
+  # --- gstack ---
+  gstack_dir="$CLAUDE_HOME/skills/gstack"
+  if [ -d "$gstack_dir" ]; then
+    echo -e "  ${GREEN}gstack:${NC} already installed at $gstack_dir"
+    BS_SKIP+=("gstack (already installed)")
+  else
+    if ! command -v git >/dev/null 2>&1; then
+      echo -e "  ${RED}gstack:${NC} git not found; cannot clone"
+      BS_FAIL+=("gstack: install git first")
+    elif confirm "Clone gstack into $gstack_dir and run setup?"; then
+      mkdir -p "$CLAUDE_HOME/skills"
+      if git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git "$gstack_dir"; then
+        if [ -x "$gstack_dir/setup" ] || [ -f "$gstack_dir/setup" ]; then
+          ( cd "$gstack_dir" && bash ./setup ) && BS_AUTO+=("gstack") || {
+            BS_FAIL+=("gstack setup: cd $gstack_dir && ./setup")
+          }
+        else
+          echo -e "  ${YELLOW}gstack:${NC} no ./setup script found; clone done, manual setup may be needed"
+          BS_MANUAL+=("gstack: cd $gstack_dir && ./setup")
+        fi
+      else
+        BS_FAIL+=("gstack clone: git clone https://github.com/garrytan/gstack.git $gstack_dir")
+      fi
+    else
+      BS_SKIP+=("gstack (declined)")
+    fi
+  fi
+
+  # --- BMAD ---
+  echo -e "  ${GRAY}BMAD is project-local. Run inside your TARGET project:${NC}"
+  echo -e "    npx bmad-method install"
+  BS_MANUAL+=("BMAD: run 'npx bmad-method install' inside your target project (NOT inside the Vibekit repo)")
+
+  # --- Codex CLI ---
+  if command -v codex >/dev/null 2>&1; then
+    BS_SKIP+=("codex (already installed)")
+  elif [ "$BOOTSTRAP_CODEX" -eq 1 ]; then
+    if ! command -v npm >/dev/null 2>&1; then
+      BS_FAIL+=("codex: npm not found; install Node.js 20+ first")
+    elif confirm "Install codex globally via 'npm install -g @openai/codex'?"; then
+      if npm install -g @openai/codex; then
+        BS_AUTO+=("codex")
+      else
+        BS_FAIL+=("codex: npm install -g @openai/codex")
+      fi
+    else
+      BS_SKIP+=("codex (declined)")
+    fi
+  else
+    BS_MANUAL+=("codex (optional): npm install -g @openai/codex  — pass --bootstrap-codex to auto-install")
+  fi
+
+  # --- superpowers / compound-engineering ---
+  echo -e "  ${GRAY}superpowers and compound-engineering must be installed via Claude Code plugins.${NC}"
+  echo -e "    /plugin marketplace add obra/superpowers-marketplace"
+  echo -e "    /plugin install superpowers@superpowers-marketplace"
+  echo -e "    (compound-engineering: install via Claude Code or Codex /plugins TUI)"
+  BS_MANUAL+=("superpowers: /plugin marketplace add obra/superpowers-marketplace then /plugin install superpowers@superpowers-marketplace")
+  BS_MANUAL+=("compound-engineering: install via Claude Code or Codex /plugins TUI")
+
+  echo -e "\n${CYAN}[6] Bootstrap report${NC}"
+  if [ ${#BS_AUTO[@]} -gt 0 ]; then
+    echo -e "  ${GREEN}installed automatically:${NC}"
+    for x in "${BS_AUTO[@]}"; do echo "    - $x"; done
+  fi
+  if [ ${#BS_SKIP[@]} -gt 0 ]; then
+    echo -e "  ${GRAY}skipped:${NC}"
+    for x in "${BS_SKIP[@]}"; do echo "    - $x"; done
+  fi
+  if [ ${#BS_MANUAL[@]} -gt 0 ]; then
+    echo -e "  ${YELLOW}manual steps required:${NC}"
+    for x in "${BS_MANUAL[@]}"; do echo "    - $x"; done
+  fi
+  if [ ${#BS_FAIL[@]} -gt 0 ]; then
+    echo -e "  ${RED}failures (recovery commands):${NC}"
+    for x in "${BS_FAIL[@]}"; do echo "    - $x"; done
+  fi
+fi
+
 echo -e "\n${CYAN}=== Done (mode: $MODE) ===${NC}"
 echo -e "Next:"
-echo -e "  - Run ./doctor.sh to verify."
+echo -e "  - Run ./doctor.sh to verify  (use --fix to attempt safe automatic fixes)."
 echo -e "  - Restart Claude Code so it reloads commands and settings."
 echo -e "  - Try a gate in audit-only mode first: /hwan-refactor-idea --audit-only"

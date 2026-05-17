@@ -74,7 +74,7 @@ Vibekit installs the local Claude Code commands automatically, then checks optio
 
 **macOS / Linux / WSL:**
 ```bash
-git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
+git clone https://github.com/YOUR-USERNAME/claude-codex-vibekit.git
 cd claude-codex-vibekit
 ./install.sh --mode safe
 ./doctor.sh
@@ -82,7 +82,7 @@ cd claude-codex-vibekit
 
 **Windows PowerShell:**
 ```powershell
-git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
+git clone https://github.com/YOUR-USERNAME/claude-codex-vibekit.git
 cd claude-codex-vibekit
 .\install.ps1 -Mode safe
 .\doctor.ps1
@@ -102,7 +102,7 @@ The installer:
 |------|--------------|
 | `commands-only` | Safest. Copies slash commands only. No hooks. No `settings.json` changes. |
 | `safe` (default recommendation) | `commands-only` + copies hooks + enables only safety hooks (block dangerous git, session-start branch safety). Auto-commit is **not** enabled. |
-| `full` | `safe` + enables auto-save / auto-commit. The current auto-save hook runs `git add -A` and may stage unrelated working-tree changes. Power-user only; the installer warns first. |
+| `full` | `safe` + enables auto-save / auto-commit. The auto-save hook now refuses to commit on `main`/`master`, with risky files in the change set (`.env`, keys, `~/.claude/settings.json`), with obvious secret patterns in the diff, with deletions (unless opted in), or when more than 30 files change. If those checks pass it still runs `git add -A` and may stage unrelated working-tree changes — power-user only; the installer warns first. |
 
 > **Global hook scope.** Hooks installed in `safe` or `full` mode live in `~/.claude` and apply to **every** Claude Code session on this user account, not just to this project. Choose `commands-only` if you want zero global side effects.
 
@@ -127,12 +127,42 @@ For the safest install:
 
 `doctor.sh` / `doctor.ps1` will tell you which of these are present and how to install what's missing:
 
-- **gstack** — installed manually via Claude Code or by cloning into `~/.claude/skills/gstack`
-- **BMAD** — runs via `npx bmad-method install` per project
-- **superpowers**, **compound-engineering** — installed through Claude Code's `/plugins` UI
-- **Codex CLI** — `npm install -g @openai/codex`
+- **gstack** — clone into `~/.claude/skills/gstack` (or pass `--bootstrap`)
+- **BMAD** — runs via `npx bmad-method install` per project (always manual; project-local)
+- **superpowers**, **compound-engineering** — installed through Claude Code's `/plugins` UI (always manual)
+- **Codex CLI** — `npm install -g @openai/codex` (or pass `--bootstrap --bootstrap-codex`)
 
 The doctor exits with `READY`, `PARTIAL`, or `ACTION REQUIRED`.
+
+### Opt-in bootstrap (new in v0.1.1)
+
+The default install never touches external tools. Add `--bootstrap` (or
+`-Bootstrap` on PowerShell) to opt in to safe automatic installs:
+
+```bash
+./install.sh --mode safe --bootstrap                  # interactive prompts
+./install.sh --mode safe --bootstrap --yes            # non-interactive
+./install.sh --mode safe --bootstrap --bootstrap-codex
+```
+```powershell
+.\install.ps1 -Mode safe -Bootstrap
+.\install.ps1 -Mode safe -Bootstrap -Yes
+.\install.ps1 -Mode safe -Bootstrap -BootstrapCodex
+```
+
+What bootstrap can do automatically: clone+setup **gstack**, and (with
+`--bootstrap-codex`) `npm install -g @openai/codex`. What it cannot:
+**BMAD** (project-local), **superpowers** and **compound-engineering**
+(plugin marketplace via Claude Code or Codex). Those remain manual with
+exact commands printed.
+
+`doctor --fix` / `doctor -Fix` runs the same opt-in pass against an
+existing install:
+
+```bash
+./doctor.sh --fix
+.\doctor.ps1 -Fix
+```
 
 ## The 4 Gates
 
@@ -179,7 +209,7 @@ What Vibekit will and will not do.
 - Back up `~/.claude/settings.json` before any modification.
 
 **Additional with `--mode full`:**
-- Auto-save / auto-commit on file edits. The current hook runs `git add -A` and commits the entire working tree, which can stage unrelated changes. The installer warns explicitly before enabling this. If that workflow does not match yours, stay on `safe` or `commands-only`.
+- Auto-save / auto-commit on file edits. The hook now refuses to commit on `main`/`master`, with risky files in the change set (`.env`, `*.pem`, `*.key`, `~/.claude/settings.json`, …), with obvious secret patterns in the diff (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `BEGIN PRIVATE KEY`, `sk-…`), with deletions (unless `HWAN_AUTOSAVE_ALLOW_DELETIONS=1`), or when more than `HWAN_AUTOSAVE_MAX_FILES` (default 30) files change. If those checks pass, it still runs `git add -A` and commits the entire working tree — which can stage unrelated changes. The installer warns explicitly before enabling this. Set `HWAN_AUTOSAVE_DISABLE=1` to disable without uninstalling.
 
 Test verification, rollback, TDD-first writing, and per-project learning notes come from the underlying skills (gstack, BMAD, superpowers, compound-engineering) — install them separately as the doctor reports.
 
@@ -270,7 +300,3 @@ Built on top of incredible open-source work:
 - [compound-engineering-plugin](https://github.com/EveryInc/compound-engineering-plugin) by EveryInc
 
 Inspired by [andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills).
-
----
-
-Maintained by [Jaehwan Ha](https://www.linkedin.com/in/%EC%9E%AC%ED%99%98-%ED%95%98-18a05238b/).

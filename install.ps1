@@ -13,8 +13,13 @@ param(
     [ValidateSet('commands-only','safe','full')]
     [string]$Mode,
 
-    [switch]$InstallClaude
+    [switch]$InstallClaude,
+
+    [switch]$Bootstrap,
+    [switch]$Yes,
+    [switch]$BootstrapCodex
 )
+if ($Yes) { $Bootstrap = $true }
 
 $ErrorActionPreference = "Stop"
 
@@ -212,8 +217,110 @@ if (Get-Command claude -ErrorAction SilentlyContinue) {
     Write-Host  "    Install (PowerShell): irm https://claude.ai/install.ps1 | iex"
 }
 
+# ---------- 6. Bootstrap (opt-in) ----------
+if ($Bootstrap) {
+    Write-Info "`n[6] Bootstrap (opt-in)"
+    $bsAuto = New-Object System.Collections.ArrayList
+    $bsSkip = New-Object System.Collections.ArrayList
+    $bsManual = New-Object System.Collections.ArrayList
+    $bsFail = New-Object System.Collections.ArrayList
+
+    function Confirm-Bootstrap($prompt) {
+        if ($Yes) { return $true }
+        $ans = Read-Host "  $prompt [y/N]"
+        return ($ans -match '^(y|Y|yes|YES)$')
+    }
+
+    # gstack
+    $gstackDir = Join-Path $ClaudeHome "skills\gstack"
+    if (Test-Path $gstackDir) {
+        Write-OK "  gstack: already installed at $gstackDir"
+        [void]$bsSkip.Add("gstack (already installed)")
+    } elseif (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        Write-Err "  gstack: git not found; cannot clone"
+        [void]$bsFail.Add("gstack: install git first")
+    } elseif (Confirm-Bootstrap "Clone gstack into $gstackDir and run setup?") {
+        New-Item -ItemType Directory -Path (Join-Path $ClaudeHome "skills") -Force | Out-Null
+        & git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git $gstackDir
+        if ($LASTEXITCODE -eq 0) {
+            $setupPath = Join-Path $gstackDir "setup"
+            if (Test-Path $setupPath) {
+                Push-Location $gstackDir
+                try {
+                    # Prefer bash if available (gstack setup is typically a bash script).
+                    $bash = Get-Command bash -ErrorAction SilentlyContinue
+                    if ($bash) {
+                        & bash ./setup
+                    } else {
+                        & $setupPath
+                    }
+                    if ($LASTEXITCODE -eq 0) {
+                        [void]$bsAuto.Add("gstack")
+                    } else {
+                        [void]$bsFail.Add("gstack setup: cd $gstackDir; bash ./setup")
+                    }
+                } finally { Pop-Location }
+            } else {
+                Write-Warn2 "  gstack: ./setup not found; clone done, manual setup may be needed"
+                [void]$bsManual.Add("gstack: cd $gstackDir; .\setup")
+            }
+        } else {
+            [void]$bsFail.Add("gstack clone: git clone https://github.com/garrytan/gstack.git `"$gstackDir`"")
+        }
+    } else {
+        [void]$bsSkip.Add("gstack (declined)")
+    }
+
+    # BMAD (project-local)
+    Write-Gray "  BMAD is project-local. Run inside your TARGET project:"
+    Write-Host "    npx bmad-method install"
+    [void]$bsManual.Add("BMAD: run 'npx bmad-method install' inside your target project (NOT inside the Vibekit repo)")
+
+    # Codex CLI
+    if (Get-Command codex -ErrorAction SilentlyContinue) {
+        [void]$bsSkip.Add("codex (already installed)")
+    } elseif ($BootstrapCodex) {
+        if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+            [void]$bsFail.Add("codex: npm not found; install Node.js 20+ first")
+        } elseif (Confirm-Bootstrap "Install codex globally via 'npm install -g @openai/codex'?") {
+            & npm install -g @openai/codex
+            if ($LASTEXITCODE -eq 0) { [void]$bsAuto.Add("codex") }
+            else { [void]$bsFail.Add("codex: npm install -g @openai/codex") }
+        } else {
+            [void]$bsSkip.Add("codex (declined)")
+        }
+    } else {
+        [void]$bsManual.Add("codex (optional): npm install -g @openai/codex  -- pass -BootstrapCodex to auto-install")
+    }
+
+    Write-Gray "  superpowers and compound-engineering must be installed via Claude Code plugins."
+    Write-Host "    /plugin marketplace add obra/superpowers-marketplace"
+    Write-Host "    /plugin install superpowers@superpowers-marketplace"
+    Write-Host "    (compound-engineering: install via Claude Code or Codex /plugins TUI)"
+    [void]$bsManual.Add("superpowers: /plugin marketplace add obra/superpowers-marketplace then /plugin install superpowers@superpowers-marketplace")
+    [void]$bsManual.Add("compound-engineering: install via Claude Code or Codex /plugins TUI")
+
+    Write-Info "`n[6] Bootstrap report"
+    if ($bsAuto.Count -gt 0) {
+        Write-OK "  installed automatically:"
+        $bsAuto   | ForEach-Object { Write-Host "    - $_" }
+    }
+    if ($bsSkip.Count -gt 0) {
+        Write-Gray "  skipped:"
+        $bsSkip   | ForEach-Object { Write-Host "    - $_" }
+    }
+    if ($bsManual.Count -gt 0) {
+        Write-Warn2 "  manual steps required:"
+        $bsManual | ForEach-Object { Write-Host "    - $_" }
+    }
+    if ($bsFail.Count -gt 0) {
+        Write-Err "  failures (recovery commands):"
+        $bsFail   | ForEach-Object { Write-Host "    - $_" }
+    }
+}
+
 Write-Info "`n=== Done (mode: $Mode) ==="
 Write-Host "Next:"
-Write-Host "  - Run .\doctor.ps1 to verify."
+Write-Host "  - Run .\doctor.ps1 to verify  (use -Fix to attempt safe automatic fixes)."
 Write-Host "  - Restart Claude Code so it reloads commands and settings."
 Write-Host "  - Try a gate in audit-only mode first: /hwan-refactor-idea --audit-only"

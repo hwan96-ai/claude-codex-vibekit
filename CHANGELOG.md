@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] — Unreleased
+
+Quality-of-life and safety improvements. No breaking changes to install modes.
+
+### Added
+- Opt-in `--bootstrap` flag for `install.sh` and `-Bootstrap` for `install.ps1`.
+  When passed, the installer can clone gstack into `~/.claude/skills/gstack`
+  and run its `./setup`. Adding `--bootstrap-codex` / `-BootstrapCodex` also
+  attempts `npm install -g @openai/codex`. BMAD, superpowers, and
+  compound-engineering are still surfaced as manual steps with exact commands
+  (BMAD is project-local; plugins must go through Claude Code's plugin UI).
+- `--fix` flag for `doctor.sh` and `-Fix` for `doctor.ps1`. Performs the same
+  safe-auto-install pass as bootstrap for tools with clear CLI flows.
+- Both bootstrap and `--fix` modes print an end-of-run report split into:
+  installed automatically, skipped, manual steps required, and failures with
+  recovery commands.
+- Auto-save kill switch and tuning knobs via environment variables:
+  `HWAN_AUTOSAVE_DISABLE=1`, `HWAN_AUTOSAVE_MAX_FILES=N` (default 30),
+  `HWAN_AUTOSAVE_ALLOW_DELETIONS=1`.
+
+### Changed
+- `auto-save.sh` (only registered in `full` mode) now refuses to commit when
+  any of the following are true, before falling back to `git add -A`:
+  not in a git repo; on `main`/`master`; risky filenames in the change set
+  (`.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa`,
+  `id_ed25519`, `.claude/settings.json`, `.claude/settings.local.json`);
+  obvious secret patterns in the diff (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
+  `BEGIN PRIVATE KEY`, `sk-*`); change set larger than
+  `HWAN_AUTOSAVE_MAX_FILES`; deletions present unless explicitly allowed. On
+  pass, it prints a short summary (branch, file count, paths) and commits as
+  `autosave: claude changes <timestamp>`.
+- Default install path is unchanged. Bootstrap is strictly opt-in.
+
+### Documented
+- README, README.ko, `docs/INSTALLATION.md`, and `docs/SECURITY.md` describe
+  the new flags and the auto-save safeguards. The existing warning that `full`
+  mode still uses `git add -A` after the checks is retained.
+
 ## [0.1.0] — Initial public release candidate
 
 First public release. Treat as early — try with `--mode commands-only` or

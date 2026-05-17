@@ -14,15 +14,27 @@ This roadmap is a sketch, not a commitment. Items move based on real usage.
 - Documentation: README, INSTALLATION, SECURITY, ARCHITECTURE, QUALITY-GATES,
   COMPARISON, EXAMPLE-RUN, CONTRIBUTING, CHANGELOG.
 
-## v0.1.x — Hardening
+## v0.1.1 — Shipped in this branch
+
+- **Opt-in bootstrap** (`install.sh --bootstrap`, `install.ps1 -Bootstrap`)
+  for gstack and (with `--bootstrap-codex` / `-BootstrapCodex`) the Codex CLI.
+  BMAD, superpowers, and compound-engineering remain manual with exact
+  commands surfaced in the report.
+- **`doctor --fix` / `doctor -Fix`** runs the same safe-auto-install pass.
+- **Safer auto-save**: refuses to commit on protected branches, with risky
+  files in the change set, with secret patterns in the diff, with deletions
+  (unless opted in), or when the change set exceeds a conservative threshold.
+  Still uses `git add -A` after checks pass — documented as such.
+
+## v0.1.x — Hardening (still open)
 
 Targeted follow-ups before a v0.2.0 minor bump:
 
 - **Installer smoke tests.** Run `--mode commands-only` against a tempdir
   on macOS, Linux, WSL, and Windows in CI.
-- **Safer auto-save** once the Claude Code hook payload schema is confirmed
-  from official docs. Goal: stage only files just touched by Claude Code,
-  not the entire working tree.
+- **Even safer auto-save** once the Claude Code hook payload schema is
+  confirmed from official docs. Goal: stage only files just touched by
+  Claude Code, not the entire working tree.
 - **Better plugin detection.** Stop relying on substring matches against
   `settings.json` for `superpowers` and `compound-engineering`.
 - **Project-scoped install mode.** Allow installing commands and hooks into a

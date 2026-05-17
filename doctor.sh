@@ -13,6 +13,25 @@ CYAN='\033[0;36m'; GRAY='\033[0;90m'; NC='\033[0m'
 
 CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 
+FIX=0
+FIX_YES=0
+for arg in "$@"; do
+  case "$arg" in
+    --fix) FIX=1 ;;
+    --yes|-y) FIX_YES=1 ;;
+    -h|--help)
+      cat <<EOF
+Usage: $0 [--fix] [--yes]
+
+  --fix    Attempt safe automatic install for missing deps with clear CLI
+           install flows (gstack). Prints guidance for the rest.
+  --yes    Non-interactive (auto-confirm prompts in --fix mode).
+EOF
+      exit 0
+      ;;
+  esac
+done
+
 required_missing=0
 optional_missing=0
 vibekit_missing=0
@@ -171,6 +190,66 @@ for event, needle, label in checks:
 PYEOF
 else
   warn "skipped (no settings.json or no python)"
+fi
+
+if [ "$FIX" -eq 1 ]; then
+  echo -e "\n${CYAN}[--fix] Attempting safe automatic fixes${NC}"
+  echo -e "${GRAY}Only tools with clear CLI installation flows are auto-installed.${NC}"
+
+  fix_confirm() {
+    if [ "$FIX_YES" -eq 1 ]; then return 0; fi
+    printf "  %s [y/N] " "$1"
+    read -r _a
+    case "$_a" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+  }
+
+  fix_auto=()
+  fix_skip=()
+  fix_manual=()
+  fix_fail=()
+
+  gstack_dir="$CLAUDE_HOME/skills/gstack"
+  if [ -d "$gstack_dir" ]; then
+    fix_skip+=("gstack (already installed)")
+  elif ! command -v git >/dev/null 2>&1; then
+    fix_fail+=("gstack: git missing")
+  elif fix_confirm "Clone gstack into $gstack_dir and run setup?"; then
+    mkdir -p "$CLAUDE_HOME/skills"
+    if git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git "$gstack_dir"; then
+      if [ -f "$gstack_dir/setup" ]; then
+        ( cd "$gstack_dir" && bash ./setup ) && fix_auto+=("gstack") \
+          || fix_fail+=("gstack setup: cd $gstack_dir && ./setup")
+      else
+        fix_manual+=("gstack: cd $gstack_dir && ./setup (no setup script auto-detected)")
+      fi
+    else
+      fix_fail+=("gstack clone: git clone https://github.com/garrytan/gstack.git $gstack_dir")
+    fi
+  else
+    fix_skip+=("gstack (declined)")
+  fi
+
+  fix_manual+=("BMAD: run 'npx bmad-method install' inside your target project")
+  fix_manual+=("superpowers: /plugin marketplace add obra/superpowers-marketplace && /plugin install superpowers@superpowers-marketplace")
+  fix_manual+=("compound-engineering: install via Claude Code or Codex /plugins TUI")
+  if ! command -v codex >/dev/null 2>&1; then
+    fix_manual+=("codex (optional): npm install -g @openai/codex")
+  fi
+
+  echo -e "\n${CYAN}[--fix] Report${NC}"
+  if [ ${#fix_auto[@]} -gt 0 ]; then
+    echo -e "  ${GREEN}installed:${NC}";  for x in "${fix_auto[@]}";   do echo "    - $x"; done
+  fi
+  if [ ${#fix_skip[@]} -gt 0 ]; then
+    echo -e "  ${GRAY}skipped:${NC}";    for x in "${fix_skip[@]}";   do echo "    - $x"; done
+  fi
+  if [ ${#fix_manual[@]} -gt 0 ]; then
+    echo -e "  ${YELLOW}manual:${NC}";   for x in "${fix_manual[@]}"; do echo "    - $x"; done
+  fi
+  if [ ${#fix_fail[@]} -gt 0 ]; then
+    echo -e "  ${RED}failures:${NC}";    for x in "${fix_fail[@]}";   do echo "    - $x"; done
+  fi
+  echo -e "${GRAY}Re-run doctor.sh (without --fix) to see updated status.${NC}"
 fi
 
 echo ""
