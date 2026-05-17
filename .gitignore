@@ -1,0 +1,48 @@
+# Workflow artifacts (generated at runtime)
+.claude/workflow/
+.claude/learnings/
+
+# Settings backups (created by installer)
+.claude/settings.json.backup-*
+*.backup
+*.backup-*
+
+# Settings files (user-local; never commit)
+.claude/settings.json
+.claude/settings.local.json
+settings.json
+settings.local.json
+
+# Secrets / credentials — never commit
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# OS-specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor-specific
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Build outputs
+dist/
+build/
+.cache/
+
+# Dependencies (none in this repo, but just in case)
+node_modules/
+venv/
+__pycache__/
+*.pyc

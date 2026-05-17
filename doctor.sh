@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+# Claude-Codex Vibekit Doctor (macOS / Linux / WSL)
+# Reports whether required and optional dependencies, Vibekit files, and hook
+# settings are in place. Exit codes:
+#   0 = READY
+#   1 = PARTIAL
+#   2 = ACTION REQUIRED
+
+set -u
+
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'
+CYAN='\033[0;36m'; GRAY='\033[0;90m'; NC='\033[0m'
+
+CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
+
+required_missing=0
+optional_missing=0
+vibekit_missing=0
+
+ok()   { echo -e "  ${GREEN}ok ${NC} $*"; }
+warn() { echo -e "  ${YELLOW}--${NC} $*"; }
+miss() { echo -e "  ${RED}!! ${NC} $*"; }
+info() { echo -e "  ${GRAY}.. ${NC} $*"; }
+
+echo -e "${CYAN}=== Vibekit doctor ===${NC}"
+echo "claude_home: $CLAUDE_HOME"
+
+echo -e "\n[required tools]"
+for bin in git node; do
+  if command -v "$bin" >/dev/null 2>&1; then
+    ok "$bin ($($bin --version 2>&1 | head -n1))"
+  else
+    miss "$bin: not found"
+    required_missing=$((required_missing+1))
+  fi
+done
+
+PYTHON_BIN=""
+for cand in python3 python; do
+  if command -v "$cand" >/dev/null 2>&1; then PYTHON_BIN="$cand"; break; fi
+done
+if [ -n "$PYTHON_BIN" ]; then
+  ok "$PYTHON_BIN ($($PYTHON_BIN --version 2>&1))"
+else
+  miss "python / python3: not found"
+  required_missing=$((required_missing+1))
+fi
+
+# Node version >= 20
+if command -v node >/dev/null 2>&1; then
+  nv=$(node -v 2>/dev/null | sed 's/^v//')
+  major=${nv%%.*}
+  if [ -n "${major:-}" ] && [ "$major" -ge 20 ] 2>/dev/null; then
+    ok "node version >= 20 ($nv)"
+  else
+    miss "node version is $nv; >= 20 required"
+    required_missing=$((required_missing+1))
+  fi
+fi
+
+if command -v claude >/dev/null 2>&1; then
+  ok "claude CLI found"
+else
+  miss "claude CLI: not found"
+  echo "       install: curl -fsSL https://claude.ai/install.sh | bash"
+  required_missing=$((required_missing+1))
+fi
+
+echo -e "\n[optional tools]"
+if command -v codex >/dev/null 2>&1; then
+  ok "codex ($(codex --version 2>/dev/null | head -n1))"
+else
+  warn "codex: not installed"
+  echo "       install: npm install -g @openai/codex"
+  optional_missing=$((optional_missing+1))
+fi
+
+if command -v npx >/dev/null 2>&1; then
+  if npx --yes bmad-method --version >/dev/null 2>&1; then
+    ok "bmad-method available via npx"
+  else
+    warn "bmad-method: not preinstalled (will install on first use)"
+    echo "       to preinstall: npx bmad-method install"
+    optional_missing=$((optional_missing+1))
+  fi
+else
+  warn "npx: not available; BMAD requires Node.js"
+  optional_missing=$((optional_missing+1))
+fi
+
+if [ -d "$CLAUDE_HOME/skills/gstack" ]; then
+  ok "gstack: $CLAUDE_HOME/skills/gstack"
+else
+  warn "gstack: not installed"
+  echo "       git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git $CLAUDE_HOME/skills/gstack"
+  echo "       cd $CLAUDE_HOME/skills/gstack && ./setup"
+  optional_missing=$((optional_missing+1))
+fi
+
+# Heuristic plugin detection (Claude Code stores plugin state in settings)
+if [ -f "$CLAUDE_HOME/settings.json" ] && grep -q 'superpowers' "$CLAUDE_HOME/settings.json" 2>/dev/null; then
+  ok "superpowers: referenced in settings.json"
+else
+  warn "superpowers: not detected"
+  echo "       install via Claude Code /plugins UI"
+  optional_missing=$((optional_missing+1))
+fi
+if [ -f "$CLAUDE_HOME/settings.json" ] && grep -q 'compound-engineering' "$CLAUDE_HOME/settings.json" 2>/dev/null; then
+  ok "compound-engineering: referenced in settings.json"
+else
+  warn "compound-engineering: not detected"
+  echo "       install via Claude Code /plugins UI (or Codex /plugins)"
+  optional_missing=$((optional_missing+1))
+fi
+
+echo -e "\n[vibekit files]"
+for f in \
+  "$CLAUDE_HOME/commands/hwan-refactor-idea.md" \
+  "$CLAUDE_HOME/commands/hwan-refactor-code.md" \
+  "$CLAUDE_HOME/commands/hwan-refactor-design.md" \
+  "$CLAUDE_HOME/commands/hwan-refactor-git.md" \
+  "$CLAUDE_HOME/commands/git-safe.md"; do
+  if [ -f "$f" ]; then ok "$f"; else miss "$f missing"; vibekit_missing=$((vibekit_missing+1)); fi
+done
+
+for f in \
+  "$CLAUDE_HOME/hooks/block-dangerous-git.py" \
+  "$CLAUDE_HOME/hooks/auto-save.sh" \
+  "$CLAUDE_HOME/hooks/session-start.sh"; do
+  if [ -f "$f" ]; then ok "$f"; else warn "$f not installed (safe/full mode would install it)"; fi
+done
+
+if [ -f "$CLAUDE_HOME/settings.json" ]; then
+  ok "$CLAUDE_HOME/settings.json present"
+else
+  warn "$CLAUDE_HOME/settings.json missing (commands-only mode is fine without it)"
+fi
+
+echo -e "\n[settings.json hook entries]"
+if [ -f "$CLAUDE_HOME/settings.json" ] && [ -n "$PYTHON_BIN" ]; then
+  "$PYTHON_BIN" - "$CLAUDE_HOME/settings.json" <<'PYEOF'
+import json, sys
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as f:
+        data = json.load(f)
+except Exception as e:
+    print(f"  !! could not parse settings.json: {e}")
+    sys.exit(0)
+
+hooks = (data.get("hooks") or {})
+
+def has(event, contains):
+    for entry in hooks.get(event, []) or []:
+        for h in entry.get("hooks", []) or []:
+            cmd = h.get("command", "")
+            if contains in cmd:
+                return cmd
+    return None
+
+checks = [
+    ("PreToolUse",  "block-dangerous-git.py", "safety"),
+    ("SessionStart","session-start.sh",       "safety"),
+    ("PostToolUse", "auto-save.sh",           "auto-commit (full mode only)"),
+]
+for event, needle, label in checks:
+    cmd = has(event, needle)
+    if cmd:
+        print(f"  ok  {event}: {label} -> {cmd}")
+    else:
+        print(f"  -- {event}: {label} not configured")
+PYEOF
+else
+  warn "skipped (no settings.json or no python)"
+fi
+
+echo ""
+if [ "$required_missing" -gt 0 ] || [ "$vibekit_missing" -gt 0 ]; then
+  echo -e "${RED}ACTION REQUIRED${NC}"
+  exit 2
+elif [ "$optional_missing" -gt 0 ]; then
+  echo -e "${YELLOW}PARTIAL${NC}"
+  exit 1
+else
+  echo -e "${GREEN}READY${NC}"
+  exit 0
+fi
