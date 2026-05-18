@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] — Unreleased
+
+Documentation-only polish for the README landing page. No installer, hook,
+script, or slash-command behavior changes.
+
+### Changed
+- `README.md` first screen: added a short "Why this exists" paragraph, a
+  compact "What you get" list, a clearly-labeled illustrative
+  `--audit-only` example output, and a short text fallback under the
+  Mermaid workflow diagram for readers whose viewer does not render
+  Mermaid.
+- `README.md`: new "Current release verification (v0.2.1)" section that
+  enumerates the specific checks that pass for the v0.2.1 tag — fresh
+  clone + safe install, doctor hook runtime verification,
+  `SHA256SUMS --check` on both platforms, CI smoke tests. Phrased as
+  release-specific, not as a general stability claim.
+- `README.md`: documentation index now links to
+  `docs/GITHUB-PUBLISHING.md`.
+- `README.ko.md`: same structural additions in natural Korean, mirroring
+  positioning and the illustrative-example warning.
+
+### Notes
+- No changes to `install.sh`, `install.ps1`, `doctor.sh`, `doctor.ps1`,
+  uninstall scripts, hooks, slash commands, `SHA256SUMS`, CI workflow,
+  release tags, or GitHub releases.
+
 ## [0.2.1] — 2026-05-18
 
 Release-gate hardening. Addresses three findings from the v0.2.0 release

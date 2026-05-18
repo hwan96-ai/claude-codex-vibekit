@@ -34,6 +34,70 @@ flowchart LR
     Design --> Release["Release Gate<br/>/hwan-refactor-git"]
 ```
 
+> Text fallback: **PRD gate → Code gate → Design gate → Release gate.** Each gate
+> is a slash command you run inside Claude Code. Audit-only mode is available on
+> every gate.
+
+## Why this exists
+
+AI coding tools are fast at *writing* changes. They are not, by themselves,
+careful about *what should not ship*. Vibekit sits between "AI wrote a diff"
+and "the diff lands on `main` or production" and adds local quality gates
+around that handoff. It is opinionated about workflow, not about your code.
+
+## What you get
+
+- **4 quality gates** as slash commands — PRD, Code, Design, Release.
+- **Audit-only mode** on every gate (no file edits, no commits, no push).
+- **Optional git safety hooks** — block force-push, block direct commits to
+  `main`/`master`, refuse risky auto-commits.
+- **Doctor** — `READY` / `PARTIAL` / `ACTION REQUIRED` status with one-line
+  fix commands per missing item.
+- **Install smoke checks** — installer verifies hooks compile and actually
+  block what they claim to block before reporting success.
+- **`SHA256SUMS`** — verify the 15 release-relevant files match the tag.
+
+## Illustrative example
+
+This is what an audit-only run looks like (shape only — your output will
+differ; this is **not** a benchmark):
+
+```text
+$ /hwan-refactor-code --audit-only
+
+== Phase 1-3: multi-perspective audit ==
+P0  (must fix)   : 0 findings
+P1  (should fix) : 2 findings  src/api/handler.ts, src/db/migrate.sql
+P2  (nice fix)   : 5 findings
+P3  (note)       : 3 findings
+
+Files touched:  none  (audit-only)
+Commits made:   none
+Push attempted: no
+Wrote: SUMMARY.md
+```
+
+See [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md) for a full illustrative
+walkthrough of all four gates.
+
+## Current release verification (v0.2.1)
+
+The following checks pass for the v0.2.1 tag of this repository. They are
+release-specific, not a general claim about all future versions:
+
+- Fresh clone + `--mode safe` install completes without errors on a clean
+  account.
+- `doctor` hook runtime verification passes (Python hooks compile,
+  `block-dangerous-git.py` blocks a force push and allows a normal push,
+  every configured hook path resolves to a real file).
+- `bash scripts/generate-checksums.sh --check` and
+  `.\scripts\generate-checksums.ps1 -Check` both succeed against the shipped
+  `SHA256SUMS`.
+- CI smoke tests pass on Ubuntu and Windows.
+
+These checks are about the installed kit and the released files. They do
+not promise that running a gate on your code will catch every bug.
+
 ## What is this?
 
 Vibekit is **not another AI coding agent.** It does not write features for you, and it does not push, merge, or deploy.
@@ -363,6 +427,7 @@ Reviewed code in a feature branch (you decide to merge)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Comparison with Cursor / Aider / Cline / Continue](docs/COMPARISON.md)
 - [Example run (illustrative)](docs/EXAMPLE-RUN.md)
+- [Release / publishing checklist](docs/GITHUB-PUBLISHING.md)
 - [Changelog](CHANGELOG.md) • [Roadmap](ROADMAP.md) • [Contributing](CONTRIBUTING.md)
 - [한국어 가이드](README.ko.md)
 

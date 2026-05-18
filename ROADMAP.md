@@ -97,6 +97,23 @@ Addresses three findings from the v0.2.0 release audit.
   as STALE (already fixed in v0.2.0); confirmed by repo-wide grep on the
   v0.2.1 branch.
 
+## v0.2.2 — In progress (README landing polish)
+
+Documentation-only. No installer, hook, script, or slash-command behavior
+changes. Focus is on first-impression clarity for the GitHub landing page.
+
+- README first-screen polish: short "Why this exists" paragraph, compact
+  "What you get" list, a clearly-labeled illustrative `--audit-only`
+  example output, and a small text fallback under the Mermaid workflow
+  diagram.
+- New "Current release verification (v0.2.1)" section in README, phrased
+  as release-specific (fresh clone safe install, doctor hook runtime
+  verification, `SHA256SUMS --check`, CI smoke tests) — not as a general
+  stability claim.
+- README documentation index links to `docs/GITHUB-PUBLISHING.md`.
+- README.ko aligned to the same structure with natural Korean rather than
+  literal translation.
+
 ## v0.1.x — Hardening (still open)
 
 Targeted follow-ups, no specific version commitment:

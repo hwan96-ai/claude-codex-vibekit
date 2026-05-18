@@ -34,7 +34,70 @@ flowchart LR
     Design --> Release["Release Gate<br/>/hwan-refactor-git"]
 ```
 
+> 텍스트 대체: **PRD 게이트 → 코드 게이트 → 디자인 게이트 → 릴리스 게이트.**
+> 각 게이트는 Claude Code 안에서 실행하는 슬래시 커맨드이고, 모든 게이트에
+> audit-only 모드가 있습니다.
+
 자세한 흐름과 doctor의 `PARTIAL` 의미는 [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md), [`docs/INSTALLATION.md`](docs/INSTALLATION.md)를 참고하세요.
+
+## 왜 만들었나
+
+AI 코딩 도구는 변경을 *쓰는* 데는 빠르지만, *무엇을 배포하면 안 되는지*에
+대해 스스로 신중하지는 않습니다. Vibekit은 "AI가 diff를 만들었다"와
+"그 diff가 `main` 또는 운영에 들어간다" 사이에 끼어들어 그 핸드오프 주변에
+로컬 품질 게이트를 더합니다. 워크플로우에 대해서는 의견이 있고, 당신의
+코드 자체에 대해서는 의견을 강제하지 않습니다.
+
+## 무엇이 들어 있나
+
+- **슬래시 커맨드 4개** — PRD, 코드, 디자인, 릴리스 게이트.
+- **모든 게이트에서 audit-only 모드** — 파일 수정 없음, 커밋 없음, 푸시 없음.
+- **선택적 git 안전 훅** — force push 차단, `main`/`master` 직접 커밋 차단,
+  위험한 자동 커밋 거부.
+- **doctor** — `READY` / `PARTIAL` / `ACTION REQUIRED` 상태와 누락 항목별
+  한 줄 수정 명령 제공.
+- **설치 스모크 체크** — 인스톨러가 훅이 실제로 컴파일되고 차단하기로 한 것을
+  진짜 차단하는지 확인한 뒤에야 성공을 보고합니다.
+- **`SHA256SUMS`** — 태그에 포함된 15개의 핵심 파일이 일치하는지 검증.
+
+## 참고용 예시 출력
+
+audit-only 실행의 형태입니다 (모양만 — 실제 출력은 다를 수 있고, **벤치마크가
+아닙니다**):
+
+```text
+$ /hwan-refactor-code --audit-only
+
+== Phase 1-3: 다관점 감사 ==
+P0  (반드시 수정) : 0 건
+P1  (수정 권장)   : 2 건  src/api/handler.ts, src/db/migrate.sql
+P2  (가능하면)     : 5 건
+P3  (메모)         : 3 건
+
+수정한 파일:   없음 (audit-only)
+커밋:          없음
+푸시 시도:     없음
+SUMMARY.md 작성됨
+```
+
+네 게이트의 전체 예시 흐름은 [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md)를
+참고하세요.
+
+## 현재 릴리스 검증 (v0.2.1)
+
+아래는 이 저장소의 v0.2.1 태그에 대해 통과한 체크입니다. 특정 릴리스에
+대한 사실이고, 앞으로의 모든 버전에 대한 일반적 주장이 아닙니다:
+
+- 새 클론 + `--mode safe` 설치가 깨끗한 계정에서 오류 없이 완료됩니다.
+- `doctor`의 훅 런타임 검증이 통과합니다 (Python 훅 컴파일,
+  `block-dangerous-git.py`가 force push는 차단하고 일반 push는 통과,
+  `settings.json` 안의 모든 훅 경로가 실재 파일을 가리킴).
+- `bash scripts/generate-checksums.sh --check` 와
+  `.\scripts\generate-checksums.ps1 -Check` 모두 `SHA256SUMS`에 대해 성공.
+- Ubuntu / Windows CI 스모크 테스트 통과.
+
+이 체크들은 설치된 키트와 릴리스 파일에 대한 것이지, 게이트를 당신의 코드에
+돌리면 모든 버그를 잡아준다는 약속이 아닙니다.
 
 ## 이게 뭐야?
 
@@ -332,6 +395,7 @@ gh pr create
 - [아키텍처](docs/ARCHITECTURE.md)
 - [Cursor / Aider / Cline / Continue 비교](docs/COMPARISON.md)
 - [예시 실행 (참고용)](docs/EXAMPLE-RUN.md)
+- [릴리스 / 퍼블리싱 체크리스트](docs/GITHUB-PUBLISHING.md)
 - [Changelog](CHANGELOG.md) • [Roadmap](ROADMAP.md) • [Contributing](CONTRIBUTING.md)
 
 ## 기여
