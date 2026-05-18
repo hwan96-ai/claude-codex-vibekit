@@ -2,6 +2,87 @@
 
 This guide describes how Vibekit installs itself, what each install mode changes, how to verify with `doctor`, and how to recover or uninstall.
 
+## Which mode should I choose?
+
+| You are… | Pick |
+|----------|------|
+| Trying Vibekit for the first time, want zero side effects | `commands-only` |
+| Most users; want the safety hooks but no auto-commit | `safe` *(recommended)* |
+| Power user who already works on disposable feature branches and *wants* auto-save/commit | `full` (read [`docs/SECURITY.md`](SECURITY.md) first) |
+| Cautious / on a shared account / on a team repo | any mode + `--scope project` |
+
+## Recommended path for first-time users
+
+1. Clone the repo.
+2. `./install.sh --mode safe` (or `--mode commands-only` if hooks make you nervous).
+3. `./doctor.sh` — expect `READY` or `PARTIAL`. PARTIAL is fine.
+4. In Claude Code, run `/hwan-refactor-idea --audit-only` against a throwaway project.
+5. Read `SUMMARY.md`. Iterate.
+
+If anything feels wrong: `./uninstall.sh --yes` reverts cleanly.
+
+## Global vs project-scoped install
+
+- **Global (default)** — installs into `~/.claude`. Affects every Claude Code session on this user account.
+- **Project (`--scope project`)** — installs into `./.claude` of the current project. Only that project's Claude Code session is affected. Writes settings to `settings.local.json` (Claude Code's machine-local convention, usually gitignored). Recommended for shared accounts, team repos, and "I just want to test this on one project" flows.
+
+## What PARTIAL means
+
+Doctor exits `PARTIAL` (rc=1) when the core works but something optional is missing. It is **not** a failure:
+
+- `commands-only` installs always report PARTIAL because the safe-mode hooks are intentionally absent.
+- Optional integrations (gstack, BMAD, superpowers, compound-engineering, Codex CLI) being absent reports PARTIAL.
+
+Audit-only gate flows still work in PARTIAL. CI smoke tests in this repo treat `READY` and `PARTIAL` as success and only fail on `ACTION REQUIRED`.
+
+## What to do if doctor says ACTION REQUIRED
+
+`ACTION REQUIRED` (rc=2) means something the kit needs is broken. Common causes and fixes:
+
+- **Missing `git` / `node` / `python` / `claude` CLI** → install the named tool and re-run.
+- **Core Vibekit command files missing in `<claude_home>/commands/`** → re-run the installer. Check that you ran from inside the cloned repo.
+- **`settings.json` could not be parsed** → restore the most recent `settings.json.backup-YYYYMMDD-HHMMSS` (the installer always backs up before modifying) or fix the JSON by hand.
+
+The `[recommended next steps]` block at the bottom of doctor's output prints the exact command for each item.
+
+## How to update an existing install
+
+Re-run the installer in the same mode. It is idempotent: file copies overwrite only the Vibekit-owned files, and hook entries are matched by `event + matcher + command` so they are not duplicated.
+
+```bash
+git pull
+./install.sh --mode safe
+./doctor.sh
+```
+
+If the upgrade adds new hook files (rare), the installer copies them and the existing `settings.json` keeps working — no entries are removed.
+
+## How to uninstall cleanly
+
+```bash
+./uninstall.sh --yes               # global
+./uninstall.sh --scope project --yes
+```
+
+The uninstaller removes only the five Vibekit slash commands, the three hook scripts, the `auto-save-payload.py` helper, and the hook entries Vibekit added to `settings.json` / `settings.local.json`. Other commands, hooks, and settings keys are preserved. `learnings/` is preserved; delete manually if you want.
+
+## When to use --bootstrap / -Bootstrap
+
+By default the installer never installs external tools. Pass `--bootstrap` only if you want the kit to clone gstack (and, with `--bootstrap-codex`, run `npm install -g @openai/codex`) for you. Everything else (BMAD, superpowers, compound-engineering) remains manual.
+
+Skip bootstrap if you prefer to install those tools yourself or already have them.
+
+## When NOT to use full mode
+
+Stay away from `--mode full` if any of the following apply:
+
+- You routinely have unrelated work-in-progress in the same working tree.
+- You don't want a commit created automatically after every Claude Code edit.
+- You're on a shared account or a long-lived branch where stray autosave commits would matter.
+- You haven't read the `git add -A` warning in [`docs/SECURITY.md`](SECURITY.md).
+
+`safe` is the recommended default. `full` is a power-user mode and the installer warns explicitly before enabling it.
+
 ## Prerequisites
 
 | Tool | Required | Notes |

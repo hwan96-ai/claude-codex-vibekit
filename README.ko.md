@@ -1,8 +1,40 @@
 # Claude-Codex Vibekit (한국어)
 
-> Claude Code(선택적으로 Codex CLI) 워크플로우에 얹는 가벼운 로컬 안전 레이어. PRD → 코드 → 디자인 → 릴리스 각 단계에서 체크. **v0.1.0 — 초기 릴리스.**
+> **또 하나의 AI 코딩 에이전트가 아닙니다.** Claude Code 사용자를 위한 로컬 품질 게이트 워크플로우(Codex CLI 선택 호환). PRD → 코드 → 디자인 → 릴리스, 각 단계에서 체크.
+
+[![smoke-tests](https://github.com/hwan96-ai/claude-codex-vibekit/actions/workflows/smoke-tests.yml/badge.svg?branch=main)](https://github.com/hwan96-ai/claude-codex-vibekit/actions/workflows/smoke-tests.yml)
+[![Latest release](https://img.shields.io/github/v/release/hwan96-ai/claude-codex-vibekit?sort=semver)](https://github.com/hwan96-ai/claude-codex-vibekit/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Claude Code](https://img.shields.io/badge/Claude_Code-Ready-blue)](https://claude.com/code)
+[![Codex CLI](https://img.shields.io/badge/Codex_CLI-Optional-green)](https://github.com/openai/codex)
 
 **English README**: [README.md](README.md)
+
+## TL;DR
+
+```bash
+git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
+cd claude-codex-vibekit
+./install.sh --mode safe         # PowerShell: .\install.ps1 -Mode safe
+./doctor.sh                       #             .\doctor.ps1
+```
+
+Claude Code 안에서 먼저 audit-only로 게이트를 시도해 보세요:
+
+```
+/hwan-refactor-idea --audit-only
+```
+
+audit-only는 `SUMMARY.md`만 남기고 멈춥니다. 파일 수정 없음, 커밋 없음, 푸시 없음.
+
+```mermaid
+flowchart LR
+    PRD["PRD Gate<br/>/hwan-refactor-idea"] --> Code["Code Gate<br/>/hwan-refactor-code"]
+    Code --> Design["Design Gate<br/>/hwan-refactor-design"]
+    Design --> Release["Release Gate<br/>/hwan-refactor-git"]
+```
+
+자세한 흐름과 doctor의 `PARTIAL` 의미는 [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md), [`docs/INSTALLATION.md`](docs/INSTALLATION.md)를 참고하세요.
 
 ## 이게 뭐야?
 
@@ -94,11 +126,21 @@ cd claude-codex-vibekit
 
 ### 설치 모드
 
+```mermaid
+flowchart LR
+    A["commands-only<br/>슬래시 커맨드만"] --> B["safe<br/>+ 안전 훅"]
+    B --> C["full<br/>+ auto-save/commit"]
+    classDef rec fill:#e0f0ff,stroke:#3070b0;
+    class B rec;
+```
+
 | 모드 | 동작 |
 |------|------|
 | `commands-only` | 가장 안전. 슬래시 커맨드만 복사. 훅 없음. `settings.json` 손 안 댐. |
 | `safe` (권장) | `commands-only` + 훅 복사 + 안전 훅만 활성화 (위험 git 차단, 세션 시작 브랜치 분기). auto-commit 켜지 **않습니다**. |
 | `full` | `safe` + auto-save / auto-commit 활성화. v0.1.1부터 훅은 `main`/`master`, 위험한 파일(`.env`, 키류, `~/.claude/settings.json`), 시크릿 패턴, 삭제 변경, 30개 초과 변경 시 커밋을 거부합니다. 그 모든 체크를 통과해도 여전히 `git add -A`를 실행해서 워킹 트리의 관련 없는 변경까지 스테이징할 수 있습니다. 파워 유저용; 설치 스크립트가 먼저 경고합니다. |
+
+`PARTIAL`은 실패가 아닙니다. 보통 "코어는 동작하지만 선택적 통합이 빠짐"을 뜻하며, audit-only 게이트 흐름은 그대로 사용할 수 있습니다. 자세한 설명은 [`docs/INSTALLATION.md`](docs/INSTALLATION.md#what-partial-means)를 참고하세요. PR/머지/푸시/배포는 어떤 모드에서도 자동으로 일어나지 않습니다.
 
 > **글로벌 훅 주의.** `safe`나 `full` 모드에서 설치되는 훅은 `~/.claude`에 있어서 이 사용자 계정의 **모든** Claude Code 세션에 적용됩니다. 이 프로젝트에서만 격리하고 싶으면 `commands-only`를 쓰거나, 아래의 **프로젝트 스코프**를 사용하세요.
 

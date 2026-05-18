@@ -127,3 +127,122 @@ If `full` mode worries you, stay on `safe`. See `docs/SECURITY.md`.
 - Whether you see four reviewers, six reviewers, or one depends on what is
   installed.
 - Numbers, file paths, and line numbers above are fabricated for illustration.
+
+---
+
+## All four gates (illustrative)
+
+Each gate runs the same Phase-0 → Phase-5 shape (load priors → parallel
+audit → synthesize plan → write SUMMARY.md → optional apply). Below are
+illustrative snippets only. Real findings depend on your project, the
+installed skills, and the model.
+
+### 1. PRD Gate — `/hwan-refactor-idea --audit-only`
+
+```markdown
+# PRD Gate — audit-only summary
+Spec: docs/prd/onboarding-redesign.md
+
+## Findings
+### P0
+- "Goal" section asserts a 40% conversion lift with no measurement plan.
+  Suggested: define baseline, sample size, and success window before build.
+### P1
+- "Out of scope" missing. Risk of feature creep.
+### P2
+- Acceptance criteria conflate UX and analytics. Split.
+## Files touched: none (audit-only)
+```
+
+### 2. Code Gate — `/hwan-refactor-code --audit-only`
+
+See the worked example above. Output lives in `SUMMARY.md`; no edits,
+no commits.
+
+### 3. Design Gate — `/hwan-refactor-design --audit-only`
+
+```markdown
+# Design Gate — audit-only summary
+Surface: src/components/SignupForm.tsx, src/pages/signup.tsx
+
+## State coverage matrix
+| State        | Covered | Notes |
+|--------------|---------|-------|
+| empty        | yes     | placeholder copy ok |
+| loading      | no      | P1: spinner missing |
+| error        | partial | P0: server error swallowed |
+| success      | yes     |       |
+| disabled     | no      | P2 |
+| a11y focus   | partial | P1: focus ring removed |
+
+## Findings
+### P0
+- Server error path silently routes to /success. Add error toast + stay on form.
+## Files touched: none (audit-only)
+```
+
+### 4. Release Gate — `/hwan-refactor-git --audit-only`
+
+```markdown
+# Release Gate — audit-only summary
+Branch: feat/onboarding-redesign  Base: main  Ahead: 12 commits
+
+## Checks
+- secrets scan:   ok
+- migration risk: P1 — schema change on users table; no backfill verified
+- test coverage:  P2 — new flows have unit tests only, no e2e
+- docs:           ok (README + CHANGELOG updated)
+- rollback:       P0 — no documented rollback for the auth-cookie change
+
+## Files touched: none (audit-only)
+## Recommended: address P0 before opening PR; re-run without --audit-only.
+```
+
+## How to interpret PARTIAL from doctor
+
+`doctor.sh` / `doctor.ps1` end with one of three verdicts. `PARTIAL` is
+**not a failure** — it usually means "the core works; some optional pieces
+aren't wired up yet." Common causes:
+
+- You chose `--mode commands-only`, so safe-mode hooks aren't configured.
+- You haven't installed gstack, BMAD, superpowers, or compound-engineering.
+- The Claude Code `/plugins` UI hasn't been used yet on this machine.
+
+Audit-only gate runs still work in PARTIAL. Treat the "recommended next
+steps" block at the bottom of doctor's output as a punch list, not as
+errors. Only `ACTION REQUIRED` should block you (missing required tool,
+missing core command files, or unparseable `settings.json`).
+
+## First 10 minutes
+
+A realistic on-ramp on a toy project. Total: ~10 minutes if your machine
+already has git, node 20+, python, and Claude Code.
+
+1. **Clone the kit** (1 min)
+   ```bash
+   git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
+   cd claude-codex-vibekit
+   ```
+2. **Install** (1 min). Start with `commands-only` if anything about hooks
+   makes you nervous, otherwise `safe`:
+   ```bash
+   ./install.sh --mode commands-only   # or --mode safe
+   ```
+3. **Run doctor** (30 s). Expect `READY` or `PARTIAL`. If `ACTION REQUIRED`,
+   follow the recommended next steps it prints.
+   ```bash
+   ./doctor.sh
+   ```
+4. **Open a throwaway project** (2 min). A small repo you don't mind
+   touching, or `git init` a temp dir and drop a README.
+5. **Run an audit-only gate** (3-5 min). PRD gate is the cheapest to try:
+   ```
+   /hwan-refactor-idea --audit-only
+   ```
+6. **Read `SUMMARY.md`** (2 min). Decide whether to fix anything by hand or
+   re-run without `--audit-only`.
+
+If something feels wrong, uninstall is one command:
+```bash
+./uninstall.sh --yes
+```

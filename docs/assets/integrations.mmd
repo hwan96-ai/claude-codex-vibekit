@@ -1,0 +1,16 @@
+%% Core vs optional integrations. Vibekit's commands and hooks are the only
+%% pieces it installs itself. Everything to the right is optional and either
+%% improves a gate or is surfaced by doctor when missing.
+flowchart LR
+    subgraph Core["Vibekit core"]
+        Cmds["5 slash commands"]
+        Hooks["safety hooks"]
+    end
+    subgraph Optional["Optional integrations"]
+        GS["gstack"]
+        BM["BMAD"]
+        SP["superpowers"]
+        CE["compound-engineering"]
+        CX["Codex CLI"]
+    end
+    Core --> Optional

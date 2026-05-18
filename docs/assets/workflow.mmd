@@ -1,0 +1,6 @@
+%% Quality-gate flow used in README.md.
+%% Render with any Mermaid renderer; GitHub renders ```mermaid blocks natively.
+flowchart LR
+    PRD["PRD Gate<br/>/hwan-refactor-idea"] --> Code["Code Gate<br/>/hwan-refactor-code"]
+    Code --> Design["Design Gate<br/>/hwan-refactor-design"]
+    Design --> Release["Release Gate<br/>/hwan-refactor-git"]

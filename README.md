@@ -1,12 +1,38 @@
 # Claude-Codex Vibekit
 
-> A lightweight local safety layer for AI-assisted coding on Claude Code (optionally compatible with Codex CLI). PRD → Code → Design → Release, with checks at each step. **v0.1.0 — initial release.**
+> **Not another AI coding agent.** A local quality-gate workflow for Claude Code users (Codex CLI optional). PRD → Code → Design → Release, with checks at each step.
 
+[![smoke-tests](https://github.com/hwan96-ai/claude-codex-vibekit/actions/workflows/smoke-tests.yml/badge.svg?branch=main)](https://github.com/hwan96-ai/claude-codex-vibekit/actions/workflows/smoke-tests.yml)
+[![Latest release](https://img.shields.io/github/v/release/hwan96-ai/claude-codex-vibekit?sort=semver)](https://github.com/hwan96-ai/claude-codex-vibekit/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Ready-blue)](https://claude.com/code)
 [![Codex CLI](https://img.shields.io/badge/Codex_CLI-Optional-green)](https://github.com/openai/codex)
 
 **한국어 README**: [README.ko.md](README.ko.md)
+
+## TL;DR
+
+```bash
+git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
+cd claude-codex-vibekit
+./install.sh --mode safe         # PowerShell: .\install.ps1 -Mode safe
+./doctor.sh                       #             .\doctor.ps1
+```
+
+Then, inside Claude Code, run a gate in audit-only mode first:
+
+```
+/hwan-refactor-idea --audit-only
+```
+
+Audit-only writes `SUMMARY.md` and stops. No file edits. No commits. No push.
+
+```mermaid
+flowchart LR
+    PRD["PRD Gate<br/>/hwan-refactor-idea"] --> Code["Code Gate<br/>/hwan-refactor-code"]
+    Code --> Design["Design Gate<br/>/hwan-refactor-design"]
+    Design --> Release["Release Gate<br/>/hwan-refactor-git"]
+```
 
 ## What is this?
 
@@ -20,6 +46,8 @@ It is a **local quality-gate workflow** that wraps your existing Claude Code (an
 4. **Release Gate** (`/hwan-refactor-git`) — pre-deployment security / QA / docs check
 
 Plus optional git safety hooks, rollback rules, and per-project learning notes so repeated mistakes become easier to catch.
+
+See [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md) for an illustrative walkthrough of all four gates and a "first 10 minutes" guide.
 
 ## Who is this for?
 
@@ -98,11 +126,21 @@ The installer:
 
 ### Install modes
 
+```mermaid
+flowchart LR
+    A["commands-only<br/>slash commands only"] --> B["safe<br/>+ safety hooks"]
+    B --> C["full<br/>+ auto-save/commit"]
+    classDef rec fill:#e0f0ff,stroke:#3070b0;
+    class B rec;
+```
+
 | Mode | What it does |
 |------|--------------|
 | `commands-only` | Safest. Copies slash commands only. No hooks. No `settings.json` changes. |
 | `safe` (default recommendation) | `commands-only` + copies hooks + enables only safety hooks (block dangerous git, session-start branch safety). Auto-commit is **not** enabled. |
 | `full` | `safe` + enables auto-save / auto-commit. The auto-save hook now refuses to commit on `main`/`master`, with risky files in the change set (`.env`, keys, `~/.claude/settings.json`), with obvious secret patterns in the diff, with deletions (unless opted in), or when more than 30 files change. If those checks pass it still runs `git add -A` and may stage unrelated working-tree changes — power-user only; the installer warns first. |
+
+See [`docs/INSTALLATION.md`](docs/INSTALLATION.md) for "Which mode should I choose?", "What PARTIAL means", and the full mode/scope decision tree.
 
 > **Global hook scope.** Hooks installed in `safe` or `full` mode live in `~/.claude` and apply to **every** Claude Code session on this user account, not just to this project. Choose `commands-only` for zero global side effects, or **project scope** (below) to confine everything to `./.claude`.
 
