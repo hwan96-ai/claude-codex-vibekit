@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] — Unreleased
+
+Quality and safety improvements for the installer and hooks. No changes to
+the slash-command behavior. No changes to which operations the dangerous-git
+hook blocks.
+
+### Added
+- **CI smoke tests** (`.github/workflows/smoke-tests.yml`) running on Ubuntu
+  and Windows for every PR and push to `main`. Each job parses the install
+  and doctor scripts, runs `tests/test-block-dangerous-git.py`, performs an
+  installer smoke test against an isolated `CLAUDE_HOME`, and asserts the
+  five slash commands were copied. Doctor exit `READY` or `PARTIAL` is
+  treated as success; `ACTION REQUIRED` fails the build. The CI does not
+  require Claude Code, gstack, BMAD, superpowers, compound-engineering, or
+  Codex to be present.
+- **Project-scoped install** via `--scope project` (Bash) / `-Scope project`
+  (PowerShell). Installs commands, hooks, and settings into `./.claude` of
+  the current project instead of the global `~/.claude`. Settings go to
+  `settings.local.json` to match Claude Code's machine-local convention.
+  Running project-scope install inside the Vibekit repo itself now prints a
+  warning and requires confirmation (or `--yes` / `-Yes`).
+- **Explicit Claude home path** via `--claude-home <path>` /
+  `-ClaudeHome <path>` for both installer and doctor — useful for CI and for
+  exotic layouts.
+- **Payload-aware auto-save** (full mode). New env var
+  `HWAN_AUTOSAVE_STAGE_MODE=auto|payload|all` (default `auto`). In `auto` or
+  `payload` mode, the hook parses the Claude Code stdin JSON and, if it can
+  extract a validated, in-repo file list, stages only those paths instead of
+  `git add -A`. `auto` falls back to the existing guarded `git add -A` when
+  the payload is absent or unusable; `payload` refuses to commit in that
+  case; `all` skips parsing and uses `git add -A` directly. All existing
+  safeguards (branch, risky paths, secrets, max files, deletions) still
+  apply.
+- `tests/test-auto-save.sh` — covers payload-only staging, payload refusal,
+  fallback, kill switch, outside-repo path rejection, and risky-path
+  refusal.
+- `tests/smoke-install.sh` and `tests/smoke-install.ps1` — driver scripts
+  used by CI and runnable locally.
+
+### Changed
+- **Doctor verdicts are clearer.** Output is split into
+  `[core readiness]`, `[hook configuration]`, `[optional integrations]`, and
+  `[recommended next steps]`. Each missing item gets a single-line fix
+  command. Doctor now returns `PARTIAL` when safe-mode hooks (`PreToolUse`
+  and `SessionStart`) are not configured — typical for `commands-only`
+  installs — instead of conflating that with optional-tool gaps.
+  Unparseable `settings.json` is now `ACTION REQUIRED`.
+- **Plugin detection** now checks both `settings.json` and
+  `settings.local.json`, the project-local `./.claude/`, the global
+  `~/.claude/plugins` and `~/.claude/skills`, and `~/.codex/plugins` /
+  `~/.codex/skills`. Wording was tightened from "not installed" to
+  "not detected by doctor (heuristic)" — the check is still a heuristic.
+- Bash `--yes` / `-y` is now a general non-interactive flag (also covers
+  the project-scope confirmation). Use `--bootstrap-yes` to also opt into
+  bootstrap. Previously `--yes` implied `--bootstrap`. The PowerShell `-Yes`
+  no longer auto-enables `-Bootstrap`.
+
+### Documented
+- README, README.ko, `docs/INSTALLATION.md`, `docs/SECURITY.md`, and
+  `ROADMAP.md` cover project-scope install, the new doctor verdict layout,
+  the `HWAN_AUTOSAVE_STAGE_MODE` modes, and the plugin-detection heuristic
+  caveat. The existing `git add -A` warning is retained.
+
 ## [0.1.2] — 2026-05-18
 
 Refines the PreToolUse `block-dangerous-git.py` hook so it stops destructive

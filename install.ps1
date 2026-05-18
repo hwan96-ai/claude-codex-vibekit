@@ -13,13 +13,17 @@ param(
     [ValidateSet('commands-only','safe','full')]
     [string]$Mode,
 
+    [ValidateSet('global','project')]
+    [string]$Scope = 'global',
+
+    [string]$ClaudeHome,
+
     [switch]$InstallClaude,
 
     [switch]$Bootstrap,
     [switch]$Yes,
     [switch]$BootstrapCodex
 )
-if ($Yes) { $Bootstrap = $true }
 
 $ErrorActionPreference = "Stop"
 
@@ -29,20 +33,36 @@ function Write-Warn2($msg) { Write-Host $msg -ForegroundColor Yellow }
 function Write-Gray($msg)  { Write-Host $msg -ForegroundColor DarkGray }
 function Write-Err($msg)   { Write-Host $msg -ForegroundColor Red }
 
-Write-Info "`n=== Claude-Codex Vibekit Installer (mode: $Mode) ==="
-
-# Path detection
+# Path detection. Precedence: -ClaudeHome > -Scope project > $env:CLAUDE_HOME > $HOME\.claude.
 $UserHome = [Environment]::GetFolderPath("UserProfile")
-if ($env:CLAUDE_HOME) {
+$RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$Cwd      = (Get-Location).Path
+
+if ($ClaudeHome) {
+    # explicit path wins
+} elseif ($Scope -eq 'project') {
+    $ClaudeHome = Join-Path $Cwd ".claude"
+} elseif ($env:CLAUDE_HOME) {
     $ClaudeHome = $env:CLAUDE_HOME
 } else {
     $ClaudeHome = Join-Path $UserHome ".claude"
 }
-$RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
+Write-Info "`n=== Claude-Codex Vibekit Installer (mode: $Mode, scope: $Scope) ==="
 Write-Gray "  home:        $UserHome"
 Write-Gray "  claude_home: $ClaudeHome"
 Write-Gray "  repo_root:   $RepoRoot"
+Write-Gray "  cwd:         $Cwd"
+
+# Project-scope safety: warn if installing into the vibekit repo itself.
+if ($Scope -eq 'project' -and ($Cwd.TrimEnd('\','/').ToLower() -eq $RepoRoot.TrimEnd('\','/').ToLower())) {
+    Write-Warn2 "warning: project-scope install inside the Vibekit repo will modify"
+    Write-Warn2 "         $RepoRoot\.claude (the kit's own source directory)."
+    if (-not $Yes) {
+        $ans = Read-Host "Continue? [y/N]"
+        if ($ans -notmatch '^(y|Y|yes|YES)$') { Write-Host "aborted"; exit 1 }
+    }
+}
 
 # Detect Python (needed for safe JSON merging)
 $PythonBin = $null
@@ -68,10 +88,21 @@ foreach ($d in $dirs) {
 Write-Host "`n[2] Installing slash commands..."
 $cmdSrcDir = Join-Path $RepoRoot ".claude\commands"
 $cmdDstDir = Join-Path $ClaudeHome "commands"
+function Test-SamePath($a, $b) {
+    try {
+        $ra = (Resolve-Path -LiteralPath $a -ErrorAction Stop).Path
+        $rb = (Resolve-Path -LiteralPath $b -ErrorAction Stop).Path
+        return ($ra.ToLower() -eq $rb.ToLower())
+    } catch { return $false }
+}
 Get-ChildItem -Path $cmdSrcDir -Filter "*.md" | ForEach-Object {
     $dst = Join-Path $cmdDstDir $_.Name
-    Copy-Item $_.FullName $dst -Force
-    Write-OK "  copied $dst"
+    if (Test-SamePath $_.FullName $dst) {
+        Write-Gray "  skip   $dst (same file)"
+    } else {
+        Copy-Item $_.FullName $dst -Force
+        Write-OK "  copied $dst"
+    }
 }
 
 if ($Mode -eq 'commands-only') {
@@ -89,13 +120,21 @@ $hookSrcDir = Join-Path $RepoRoot ".claude\hooks"
 $hookDstDir = Join-Path $ClaudeHome "hooks"
 Get-ChildItem -Path $hookSrcDir -File | ForEach-Object {
     $dst = Join-Path $hookDstDir $_.Name
-    Copy-Item $_.FullName $dst -Force
-    Write-OK "  copied $dst"
+    if (Test-SamePath $_.FullName $dst) {
+        Write-Gray "  skip   $dst (same file)"
+    } else {
+        Copy-Item $_.FullName $dst -Force
+        Write-OK "  copied $dst"
+    }
 }
 
 # ---------- 4. settings.json merge ----------
-Write-Host "`n[4] Merging settings.json (mode: $Mode)..."
-$Settings = Join-Path $ClaudeHome "settings.json"
+if ($Scope -eq 'project') {
+    $Settings = Join-Path $ClaudeHome "settings.local.json"
+} else {
+    $Settings = Join-Path $ClaudeHome "settings.json"
+}
+Write-Host "`n[4] Merging $Settings (mode: $Mode)..."
 
 if (-not $PythonBin) {
     Write-Err "  error: python is required to merge settings.json safely. Install Python 3."

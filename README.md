@@ -104,7 +104,25 @@ The installer:
 | `safe` (default recommendation) | `commands-only` + copies hooks + enables only safety hooks (block dangerous git, session-start branch safety). Auto-commit is **not** enabled. |
 | `full` | `safe` + enables auto-save / auto-commit. The auto-save hook now refuses to commit on `main`/`master`, with risky files in the change set (`.env`, keys, `~/.claude/settings.json`), with obvious secret patterns in the diff, with deletions (unless opted in), or when more than 30 files change. If those checks pass it still runs `git add -A` and may stage unrelated working-tree changes — power-user only; the installer warns first. |
 
-> **Global hook scope.** Hooks installed in `safe` or `full` mode live in `~/.claude` and apply to **every** Claude Code session on this user account, not just to this project. Choose `commands-only` if you want zero global side effects.
+> **Global hook scope.** Hooks installed in `safe` or `full` mode live in `~/.claude` and apply to **every** Claude Code session on this user account, not just to this project. Choose `commands-only` for zero global side effects, or **project scope** (below) to confine everything to `./.claude`.
+
+### Project-scoped install (new in v0.1.3)
+
+If you don't want global side effects but still want hooks for a single
+project, pass `--scope project` (Bash) / `-Scope project` (PowerShell):
+
+```bash
+./install.sh --mode safe --scope project        # writes to ./.claude
+./install.sh --mode safe --claude-home /custom  # explicit path
+```
+```powershell
+.\install.ps1 -Mode safe -Scope project
+.\install.ps1 -Mode safe -ClaudeHome C:\custom
+```
+
+Project scope uses `settings.local.json` (Claude Code's machine-local
+convention, typically gitignored). Running project-scope install inside the
+Vibekit repo itself requires explicit confirmation (or `--yes` / `-Yes`).
 
 ### Try it safely first
 

@@ -14,16 +14,29 @@ This guide describes how Vibekit installs itself, what each install mode changes
 
 ## Path detection
 
-The installer auto-detects locations:
+The installer picks the install root in this order:
 
-- **macOS / Linux / WSL**
-  - `HOME = $HOME`
-  - `CLAUDE_HOME = ${CLAUDE_HOME:-$HOME/.claude}`
-- **Windows PowerShell**
-  - `HOME = [Environment]::GetFolderPath("UserProfile")` (typically `C:\Users\<you>`)
-  - `CLAUDE_HOME = $env:CLAUDE_HOME` if set, otherwise `<HOME>\.claude`
+1. `--claude-home <path>` / `-ClaudeHome <path>` (explicit path).
+2. `--scope project` / `-Scope project` → `./.claude` under the current
+   working directory.
+3. `CLAUDE_HOME` / `$env:CLAUDE_HOME` environment variable.
+4. Default: `~/.claude` (Bash) or `<UserProfile>\.claude` (PowerShell).
 
-Override by exporting `CLAUDE_HOME` (or `$env:CLAUDE_HOME` on Windows) before running the installer.
+Override by exporting `CLAUDE_HOME` (or `$env:CLAUDE_HOME` on Windows)
+before running, or by passing `--claude-home` explicitly.
+
+## Install scope
+
+| Scope | Path | Affects | When to use |
+|-------|------|---------|-------------|
+| `global` (default) | `~/.claude` | every Claude Code session on this user account | personal default workstation |
+| `project` | `./.claude` of the current project | only that project's Claude Code session | cautious users, teams, shared accounts |
+
+Project scope writes its settings to `settings.local.json` (Claude Code's
+machine-local convention) so the file is typically gitignored. Running
+project-scope install inside the Vibekit repo itself prints a warning and
+requires confirmation (`--yes` / `-Yes` to skip the prompt). Same-file copies
+inside the repo are skipped rather than failing.
 
 ## Install modes
 
@@ -76,6 +89,8 @@ Other variants:
 ```bash
 ./install.sh --mode commands-only
 ./install.sh --mode full
+./install.sh --mode safe --scope project           # install into ./.claude
+./install.sh --mode safe --claude-home /custom/dir # explicit path
 ./install.sh --help
 ```
 
@@ -95,13 +110,35 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -Mode safe
 
 ## Doctor
 
-`doctor.sh` / `doctor.ps1` inspect the environment and print a report. They end with exactly one of:
+`doctor.sh` / `doctor.ps1` inspect the environment and print a report in four
+sections:
 
-- `READY` — required tools present, core Vibekit commands installed, hooks configured if expected.
-- `PARTIAL` — commands installed but one or more optional integrations are missing (codex, gstack, BMAD, superpowers, compound-engineering).
-- `ACTION REQUIRED` — required tools are missing or core command files are not installed.
+- `[core readiness]` — required tools (git, node>=20, python, claude CLI)
+  and the five Vibekit command files.
+- `[hook configuration]` — what hook entries are wired in `settings.json` /
+  `settings.local.json` (project scope).
+- `[optional integrations]` — codex, BMAD, gstack, plugin detection. Plugin
+  presence is heuristic.
+- `[recommended next steps]` — one-line fix command per missing item.
 
-Exit codes: `0` READY, `1` PARTIAL, `2` ACTION REQUIRED. Useful for scripting.
+Verdicts:
+
+- `READY` — required tools present, core Vibekit commands installed, both
+  safe-mode hooks (`PreToolUse`, `SessionStart`) configured, no optional gaps.
+- `PARTIAL` — core OK, but one or more of: optional integrations missing
+  (codex, gstack, BMAD, plugins); safe-mode hooks not configured (typical for
+  `commands-only` installs). Audit-only command flows still work.
+- `ACTION REQUIRED` — required tool missing, core command files missing, or
+  `settings.json` is unparseable.
+
+Exit codes: `0` READY, `1` PARTIAL, `2` ACTION REQUIRED. Useful for scripting
+and for CI smoke tests, which treat 0 and 1 as success.
+
+```bash
+./doctor.sh                            # global
+./doctor.sh --scope project            # inspect ./.claude
+./doctor.sh --claude-home /custom/dir  # explicit path
+```
 
 ## Opt-in bootstrap
 
@@ -217,12 +254,14 @@ If something goes wrong:
 ## Uninstall
 
 ```bash
-./uninstall.sh          # prompts to confirm
-./uninstall.sh --yes    # non-interactive
+./uninstall.sh                       # global, prompts
+./uninstall.sh --yes                 # global, non-interactive
+./uninstall.sh --scope project --yes # project-local
 ```
 ```powershell
 .\uninstall.ps1
 .\uninstall.ps1 -Yes
+.\uninstall.ps1 -Scope project -Yes
 ```
 
 The uninstaller:

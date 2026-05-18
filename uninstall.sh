@@ -11,16 +11,44 @@
 
 set -u
 
-CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
+SCOPE="global"
+CLAUDE_HOME_ARG=""
 AUTO_YES=0
-if [ "${1:-}" = "--yes" ] || [ "${1:-}" = "-y" ]; then AUTO_YES=1; fi
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --yes|-y) AUTO_YES=1; shift ;;
+    --scope) SCOPE="${2:-}"; shift 2 ;;
+    --scope=*) SCOPE="${1#*=}"; shift ;;
+    --claude-home) CLAUDE_HOME_ARG="${2:-}"; shift 2 ;;
+    --claude-home=*) CLAUDE_HOME_ARG="${1#*=}"; shift ;;
+    -h|--help)
+      echo "Usage: $0 [--yes] [--scope global|project] [--claude-home <path>]"
+      exit 0 ;;
+    *) echo "Unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+if [ -n "$CLAUDE_HOME_ARG" ]; then
+  CLAUDE_HOME="$CLAUDE_HOME_ARG"
+elif [ "$SCOPE" = "project" ]; then
+  CLAUDE_HOME="$(pwd)/.claude"
+else
+  CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
+fi
+
+if [ "$SCOPE" = "project" ]; then
+  SETTINGS="$CLAUDE_HOME/settings.local.json"
+else
+  SETTINGS="$CLAUDE_HOME/settings.json"
+fi
 
 echo "Vibekit uninstall plan:"
+echo "  scope:       $SCOPE"
 echo "  claude_home: $CLAUDE_HOME"
-echo "  - remove ~/.claude/commands/hwan-refactor-*.md"
-echo "  - remove ~/.claude/commands/git-safe.md"
-echo "  - remove ~/.claude/hooks/{block-dangerous-git.py,auto-save.sh,session-start.sh}"
-echo "  - remove vibekit-added entries from settings.json (backed up first)"
+echo "  settings:    $SETTINGS"
+echo "  - remove commands/hwan-refactor-*.md and commands/git-safe.md"
+echo "  - remove hooks/{block-dangerous-git.py,auto-save.sh,session-start.sh}"
+echo "  - remove vibekit-added entries from $SETTINGS (backed up first)"
 echo "  - learnings/ are preserved (delete manually if desired)"
 
 if [ "$AUTO_YES" -ne 1 ]; then
@@ -42,7 +70,6 @@ for f in \
   if [ -f "$f" ]; then rm -f "$f"; echo "removed $f"; removed=$((removed+1)); fi
 done
 
-SETTINGS="$CLAUDE_HOME/settings.json"
 if [ -f "$SETTINGS" ]; then
   PYTHON_BIN=""
   for c in python3 python; do command -v "$c" >/dev/null 2>&1 && PYTHON_BIN="$c" && break; done

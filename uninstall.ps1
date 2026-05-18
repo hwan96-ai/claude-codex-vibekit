@@ -6,17 +6,32 @@
 
 [CmdletBinding()]
 param(
-    [switch]$Yes
+    [switch]$Yes,
+    [ValidateSet('global','project')]
+    [string]$Scope = 'global',
+    [string]$ClaudeHome
 )
 
-if ($env:CLAUDE_HOME) {
-    $ClaudeHome = $env:CLAUDE_HOME
+if (-not $ClaudeHome) {
+    if ($Scope -eq 'project') {
+        $ClaudeHome = Join-Path (Get-Location).Path ".claude"
+    } elseif ($env:CLAUDE_HOME) {
+        $ClaudeHome = $env:CLAUDE_HOME
+    } else {
+        $ClaudeHome = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".claude"
+    }
+}
+
+if ($Scope -eq 'project') {
+    $Settings = Join-Path $ClaudeHome "settings.local.json"
 } else {
-    $ClaudeHome = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".claude"
+    $Settings = Join-Path $ClaudeHome "settings.json"
 }
 
 Write-Host "Vibekit uninstall plan:"
+Write-Host "  scope:       $Scope"
 Write-Host "  claude_home: $ClaudeHome"
+Write-Host "  settings:    $Settings"
 Write-Host "  - remove commands\hwan-refactor-*.md and commands\git-safe.md"
 Write-Host "  - remove hooks\block-dangerous-git.py, hooks\auto-save.sh, hooks\session-start.sh"
 Write-Host "  - remove vibekit-added entries from settings.json (backed up first)"
@@ -47,7 +62,6 @@ foreach ($rel in $targets) {
     }
 }
 
-$Settings = Join-Path $ClaudeHome "settings.json"
 if (Test-Path $Settings) {
     $Python = $null
     foreach ($cand in @('python','python3','py')) {

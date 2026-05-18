@@ -37,21 +37,34 @@ This roadmap is a sketch, not a commitment. Items move based on real usage.
   `main`/`master` remain blocked. Covered by
   `tests/test-block-dangerous-git.py`.
 
+## v0.1.3 — Shipped in this branch
+
+- **CI smoke tests** on Ubuntu and Windows: shell/PowerShell parse,
+  block-dangerous-git unit tests, and isolated-`CLAUDE_HOME` install +
+  doctor run.
+- **Project-scoped install** (`--scope project` / `-Scope project`) with a
+  guard that warns when run inside the Vibekit repo itself.
+- **Payload-aware auto-save** via `HWAN_AUTOSAVE_STAGE_MODE=auto|payload|all`.
+  When the Claude Code hook payload provides validated, in-repo file paths,
+  the hook stages only those. Falls back to the guarded `git add -A` when
+  payload is absent (auto) or refuses (payload mode).
+- **Improved doctor verdicts**: split into core / hook / optional /
+  next-steps sections, with one-line fix commands per missing item.
+  Unparseable `settings.json` is now `ACTION REQUIRED`.
+- **Plugin detection** now checks both global and project `.claude`,
+  `settings.json` and `settings.local.json`, plus `~/.codex` directories.
+  Wording reflects that it is still a heuristic.
+
 ## v0.1.x — Hardening (still open)
 
 Targeted follow-ups before a v0.2.0 minor bump:
 
-- **Installer smoke tests.** Run `--mode commands-only` against a tempdir
-  on macOS, Linux, WSL, and Windows in CI.
-- **Even safer auto-save** once the Claude Code hook payload schema is
-  confirmed from official docs. Goal: stage only files just touched by
-  Claude Code, not the entire working tree.
-- **Better plugin detection.** Stop relying on substring matches against
-  `settings.json` for `superpowers` and `compound-engineering`.
-- **Project-scoped install mode.** Allow installing commands and hooks into a
-  per-project `.claude/` instead of the global `~/.claude/`.
-- **Doctor verdict tuning.** Make optional integrations classifiable so the
-  `PARTIAL` verdict can be tightened.
+- **Cross-platform CI for safe/full install modes**, not only
+  commands-only. Currently safe/full are exercised by local validation.
+- **Verified hook payload schema** when Claude Code documents one. Today
+  the payload parser is conservative across versions.
+- **First-class project-mode init** (e.g. `vibekit init` style helper that
+  picks scope, mode, and settings.local-vs-settings.json).
 
 ## Future — Nice to have
 
