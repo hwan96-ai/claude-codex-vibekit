@@ -44,6 +44,11 @@ ALLOWED_ON_FEATURE = [
     "git merge feature/x",
     "git checkout -- file.txt",
     'echo "git push --force"',  # quoted, not actually invoking git
+    # Prose mentioning dangerous commands inside a non-git command (e.g. PR
+    # body, commit message) must not trip the hook. Regression for v0.1.1
+    # where any command text containing "main" or "git clean -f" was blocked.
+    'gh pr create --body "This mentions git clean -f but is not a git command"',
+    'gh pr create --title "fix: handle git reset --hard edge case"',
 ]
 
 BLOCKED_ANYWHERE = [
