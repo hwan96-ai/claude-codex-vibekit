@@ -72,6 +72,43 @@ Kill switch and tuning (environment variables read by `auto-save.sh`):
 
 Hooks live in `~/.claude/hooks` and are wired up through `~/.claude/settings.json`, which is Claude Code's **global** config. A hook registered there fires for **every** Claude Code session on this user account, not only for projects in this directory. That is by design but worth knowing — if you share an account across many projects, all of them inherit these hooks. To avoid that entirely, install with `--mode commands-only`.
 
+## What the `block-dangerous-git.py` hook actually blocks
+
+The PreToolUse hook (`safe` and `full` modes) blocks destructive or
+history-rewriting git operations. It does **not** block normal pushes, even
+to `main` — releasing from `main` is a legitimate, intentional action and
+the user must remain in control of it.
+
+Blocked:
+
+- `git push --force`, `git push -f`, `git push --force-with-lease[=...]`
+- `git reset --hard`
+- `git clean -f` / `-fd` / `-xdf` / `--force` (any variant with the force flag)
+- `git checkout -- .` (discards all local changes)
+- `git push <remote> --delete <main|master>` and `git push <remote> :<main|master>`
+- `git branch -D <name>`
+- `git commit --amend`
+- `git rebase` while the current branch is `main` / `master`
+- `git commit` / `git merge` while the current branch is `main` / `master`
+- `rm -rf /`
+
+Not blocked:
+
+- `git push origin main`, `git push -u origin main`, `git push`,
+  `git push origin HEAD:main`
+- `git push origin --tags`, `git push origin v0.1.2`
+- `git push -u origin feat/whatever`
+- `git commit -m "fix main bug"` on a feature branch (the word "main" in a
+  commit message is irrelevant)
+
+The hook decides "are we on a protected branch?" by running
+`git rev-parse --abbrev-ref HEAD`, not by string-matching `main` in the
+command line. Set `VIBEKIT_HOOK_TEST_BRANCH=<name>` to override branch
+detection in tests.
+
+PR creation, merge, and deploy remain manual in every mode. The hook does
+not push, merge, or deploy on the user's behalf.
+
 ## What the installer never does
 
 - Never pushes to a remote.

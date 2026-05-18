@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] — Unreleased
+
+Refines the PreToolUse `block-dangerous-git.py` hook so it stops destructive
+and history-rewriting git operations without blocking normal pushes.
+
+### Changed
+- `block-dangerous-git.py` is now token-based (`shlex`) instead of substring
+  matching. The previous version blocked any command containing the literal
+  token `main` — including `git push origin main` and `git push -u origin main`
+  — which got in the way of intentional releases from `main`.
+- Direct-commit protection on `main`/`master` now keys off the *current
+  branch* (`git rev-parse --abbrev-ref HEAD`), not the command line text.
+- Force-push detection now matches `--force`, `-f`, and `--force-with-lease`
+  as flags, including `--force-with-lease=origin/main`.
+- Added explicit blocks for `git push origin --delete <protected>`,
+  `git push origin :<protected>`, `git branch -D`, `git commit --amend`,
+  and `git rebase` while on `main`/`master`.
+- Conservative regex fallback retained for cases where shlex tokenization
+  fails on unusual shell syntax.
+
+### Allowed (previously blocked)
+- `git push origin main`, `git push -u origin main`, `git push`,
+  `git push origin HEAD:main`, `git push origin v0.1.2`,
+  `git push origin --tags`, `git commit -m "fix main bug"` on a feature
+  branch. Force pushes and destructive operations remain blocked.
+
+### Added
+- `tests/test-block-dangerous-git.py` — self-contained checks (no test
+  framework dependency) for the allow/block matrix above. Run with
+  `python tests/test-block-dangerous-git.py`.
+- `VIBEKIT_HOOK_TEST_BRANCH` env var lets tests inject the current branch
+  without spawning git.
+
+### Documented
+- `docs/SECURITY.md` clarifies that the hook blocks destructive and
+  history-rewriting operations only; normal non-force pushes (including to
+  `main`) are not blocked. PR / merge / deploy remain manual as before.
+
 ## [0.1.1] — 2026-05-18
 
 Quality-of-life and safety improvements. No breaking changes to install modes.
