@@ -100,7 +100,25 @@ cd claude-codex-vibekit
 | `safe` (권장) | `commands-only` + 훅 복사 + 안전 훅만 활성화 (위험 git 차단, 세션 시작 브랜치 분기). auto-commit 켜지 **않습니다**. |
 | `full` | `safe` + auto-save / auto-commit 활성화. v0.1.1부터 훅은 `main`/`master`, 위험한 파일(`.env`, 키류, `~/.claude/settings.json`), 시크릿 패턴, 삭제 변경, 30개 초과 변경 시 커밋을 거부합니다. 그 모든 체크를 통과해도 여전히 `git add -A`를 실행해서 워킹 트리의 관련 없는 변경까지 스테이징할 수 있습니다. 파워 유저용; 설치 스크립트가 먼저 경고합니다. |
 
-> **글로벌 훅 주의.** `safe`나 `full` 모드에서 설치되는 훅은 `~/.claude`에 있어서 이 사용자 계정의 **모든** Claude Code 세션에 적용됩니다. 이 프로젝트에서만 격리하고 싶으면 `commands-only`를 쓰세요.
+> **글로벌 훅 주의.** `safe`나 `full` 모드에서 설치되는 훅은 `~/.claude`에 있어서 이 사용자 계정의 **모든** Claude Code 세션에 적용됩니다. 이 프로젝트에서만 격리하고 싶으면 `commands-only`를 쓰거나, 아래의 **프로젝트 스코프**를 사용하세요.
+
+### 프로젝트 스코프 설치 (v0.1.3 신규)
+
+전역 부작용 없이 단일 프로젝트에 훅을 두고 싶다면 `--scope project`
+(Bash) / `-Scope project` (PowerShell)를 사용하세요:
+
+```bash
+./install.sh --mode safe --scope project        # ./.claude 에 설치
+./install.sh --mode safe --claude-home /custom  # 명시 경로
+```
+```powershell
+.\install.ps1 -Mode safe -Scope project
+.\install.ps1 -Mode safe -ClaudeHome C:\custom
+```
+
+프로젝트 스코프는 `settings.local.json`(Claude Code의 머신 로컬 관례,
+보통 gitignore 대상)을 사용합니다. Vibekit 저장소 안에서 프로젝트 스코프
+설치를 실행하면 명시적 확인(`--yes` / `-Yes`로 생략 가능)을 요구합니다.
 
 ### 먼저 안전하게 시도해 보기
 

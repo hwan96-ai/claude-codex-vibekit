@@ -12,6 +12,15 @@ import os
 import pathlib
 import sys
 
+# Korean block reasons may not encode in the default Windows code page (cp1252).
+# Reconfigure stdout/stderr to UTF-8 best-effort; if unavailable, fall through
+# to whatever the platform provides.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 HOOK_DIR = ROOT / ".claude" / "hooks"
 sys.path.insert(0, str(HOOK_DIR))

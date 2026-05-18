@@ -22,6 +22,9 @@ INSTALL_CLAUDE=0
 BOOTSTRAP=0
 BOOTSTRAP_YES=0
 BOOTSTRAP_CODEX=0
+SCOPE="global"
+CLAUDE_HOME_ARG=""
+YES_ALL=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -31,14 +34,29 @@ while [ $# -gt 0 ]; do
     --mode=*)
       MODE="${1#*=}"; shift
       ;;
+    --scope)
+      SCOPE="${2:-}"; shift 2
+      ;;
+    --scope=*)
+      SCOPE="${1#*=}"; shift
+      ;;
+    --claude-home)
+      CLAUDE_HOME_ARG="${2:-}"; shift 2
+      ;;
+    --claude-home=*)
+      CLAUDE_HOME_ARG="${1#*=}"; shift
+      ;;
     --install-claude)
       INSTALL_CLAUDE=1; shift
       ;;
     --bootstrap)
       BOOTSTRAP=1; shift
       ;;
-    --bootstrap-yes|--yes)
-      BOOTSTRAP=1; BOOTSTRAP_YES=1; shift
+    --bootstrap-yes)
+      BOOTSTRAP=1; BOOTSTRAP_YES=1; YES_ALL=1; shift
+      ;;
+    --yes|-y)
+      BOOTSTRAP_YES=1; YES_ALL=1; shift
       ;;
     --bootstrap-codex)
       BOOTSTRAP_CODEX=1; shift
@@ -48,7 +66,8 @@ while [ $# -gt 0 ]; do
 Claude-Codex Vibekit installer
 
 Usage:
-  $0 --mode <commands-only|safe|full> [--bootstrap [--yes] [--bootstrap-codex]]
+  $0 --mode <commands-only|safe|full> [--scope <global|project>]
+     [--claude-home <path>] [--bootstrap [--yes] [--bootstrap-codex]]
 
 Modes:
   commands-only  Copy slash commands only. No hooks. No settings.json changes.
@@ -57,11 +76,20 @@ Modes:
                  Auto-save / auto-commit hook is NOT enabled.
   full           safe + enable auto-save / auto-commit hook. Power-user mode.
 
+Scope:
+  global   (default) install into \$CLAUDE_HOME or \$HOME/.claude. Affects all
+           Claude Code sessions on this account.
+  project  install into ./.claude under the current directory. Only that
+           project's Claude Code session is affected. Recommended for cautious
+           users and teams.
+
 Flags:
+  --claude-home <path>  Explicit Claude home directory. Overrides --scope path.
   --bootstrap        Opt-in: attempt safe automatic install of supported
                      external deps (gstack). Prints guidance for the rest
                      (BMAD, superpowers, compound-engineering).
-  --yes              Non-interactive bootstrap (implies --bootstrap).
+  --yes, -y          Non-interactive (auto-confirm prompts, including scope=project
+                     inside the vibekit repo).
   --bootstrap-codex  Also attempt 'npm install -g @openai/codex'.
   --install-claude   Reserved. Currently prints guidance only.
   -h, --help         Show this help.
@@ -89,14 +117,44 @@ case "$MODE" in
     ;;
 esac
 
-echo -e "\n${CYAN}=== Claude-Codex Vibekit Installer (mode: $MODE) ===${NC}"
+case "$SCOPE" in
+  global|project) ;;
+  *)
+    echo -e "${RED}error:${NC} unknown scope '$SCOPE'. Use global or project." >&2
+    exit 2
+    ;;
+esac
 
-CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CWD="$(pwd)"
 
+# Resolve CLAUDE_HOME. Precedence: --claude-home > scope=project > env CLAUDE_HOME > $HOME/.claude.
+if [ -n "$CLAUDE_HOME_ARG" ]; then
+  CLAUDE_HOME="$CLAUDE_HOME_ARG"
+elif [ "$SCOPE" = "project" ]; then
+  CLAUDE_HOME="$CWD/.claude"
+else
+  CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
+fi
+
+echo -e "\n${CYAN}=== Claude-Codex Vibekit Installer (mode: $MODE, scope: $SCOPE) ===${NC}"
 echo -e "  ${GRAY}home:        $HOME${NC}"
 echo -e "  ${GRAY}claude_home: $CLAUDE_HOME${NC}"
 echo -e "  ${GRAY}repo_root:   $REPO_ROOT${NC}"
+echo -e "  ${GRAY}cwd:         $CWD${NC}"
+
+# Project-scope safety: if installing into the vibekit repo itself, require
+# explicit confirmation. The kit's own .claude/ is the source of truth for
+# commands and hooks; an unintended in-place install can churn or shadow it.
+if [ "$SCOPE" = "project" ] && [ "$CWD" = "$REPO_ROOT" ]; then
+  echo -e "${YELLOW}warning:${NC} project-scope install inside the Vibekit repo will modify"
+  echo -e "         $REPO_ROOT/.claude (the kit's own source directory)."
+  if [ "$YES_ALL" -ne 1 ]; then
+    printf "Continue? [y/N] "
+    read -r _ans
+    case "$_ans" in y|Y|yes|YES) ;; *) echo "aborted"; exit 1 ;; esac
+  fi
+fi
 
 # Pick a python3 interpreter for JSON merging
 PYTHON_BIN=""
@@ -120,10 +178,22 @@ done
 
 # ---------- 2. Slash commands ----------
 echo -e "\n[2] Installing slash commands..."
+# When scope=project inside the vibekit repo, source and destination resolve
+# to the same path. Skip self-copy rather than error.
+same_path() {
+  # Portable enough: compare absolute paths via cd ... && pwd -P.
+  a="$(cd "$(dirname "$1")" 2>/dev/null && printf '%s/%s' "$(pwd -P)" "$(basename "$1")")" || a=""
+  b="$(cd "$(dirname "$2")" 2>/dev/null && printf '%s/%s' "$(pwd -P)" "$(basename "$2")")" || b=""
+  [ -n "$a" ] && [ "$a" = "$b" ]
+}
 for src in "$REPO_ROOT/.claude/commands/"*.md; do
   [ -f "$src" ] || continue
   base="$(basename "$src")"
   dst="$CLAUDE_HOME/commands/$base"
+  if same_path "$src" "$dst"; then
+    echo -e "  ${GRAY}skip  ${NC} $dst (same file)"
+    continue
+  fi
   cp -f "$src" "$dst"
   echo -e "  ${GREEN}copied${NC} $dst"
 done
@@ -143,16 +213,26 @@ for src in "$REPO_ROOT/.claude/hooks/"*; do
   [ -f "$src" ] || continue
   base="$(basename "$src")"
   dst="$CLAUDE_HOME/hooks/$base"
-  cp -f "$src" "$dst"
-  case "$base" in
-    *.sh|*.py) chmod +x "$dst" 2>/dev/null || true ;;
-  esac
-  echo -e "  ${GREEN}copied${NC} $dst"
+  if same_path "$src" "$dst"; then
+    echo -e "  ${GRAY}skip  ${NC} $dst (same file)"
+  else
+    cp -f "$src" "$dst"
+    case "$base" in
+      *.sh|*.py) chmod +x "$dst" 2>/dev/null || true ;;
+    esac
+    echo -e "  ${GREEN}copied${NC} $dst"
+  fi
 done
 
 # ---------- 4. settings.json merge ----------
-echo -e "\n[4] Merging settings.json (mode: $MODE)..."
-SETTINGS="$CLAUDE_HOME/settings.json"
+# In project scope, prefer settings.local.json (per Claude Code convention:
+# settings.local.json is machine-local and typically gitignored).
+if [ "$SCOPE" = "project" ]; then
+  SETTINGS="$CLAUDE_HOME/settings.local.json"
+else
+  SETTINGS="$CLAUDE_HOME/settings.json"
+fi
+echo -e "\n[4] Merging $SETTINGS (mode: $MODE)..."
 
 if [ -z "$PYTHON_BIN" ]; then
   echo -e "  ${RED}error:${NC} python is required to merge settings.json safely. Install Python 3."

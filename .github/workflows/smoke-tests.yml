@@ -1,0 +1,109 @@
+name: smoke-tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  ubuntu-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Shell syntax check
+        run: |
+          bash -n install.sh
+          bash -n doctor.sh
+          bash -n uninstall.sh
+          bash -n .claude/hooks/auto-save.sh
+          bash -n .claude/hooks/session-start.sh
+          bash -n tests/smoke-install.sh
+          if [ -f tests/test-auto-save.sh ]; then bash -n tests/test-auto-save.sh; fi
+
+      - name: Python compile check
+        run: python -m py_compile .claude/hooks/block-dangerous-git.py
+
+      - name: block-dangerous-git unit tests
+        run: python tests/test-block-dangerous-git.py
+
+      - name: auto-save tests
+        run: |
+          if [ -f tests/test-auto-save.sh ]; then
+            bash tests/test-auto-save.sh
+          else
+            echo "auto-save tests not present; skipping"
+          fi
+
+      - name: Smoke install (global, commands-only)
+        env:
+          CLAUDE_HOME: ${{ runner.temp }}/vibekit-claude-global
+          VIBEKIT_SMOKE_MODE: commands-only
+          VIBEKIT_SMOKE_SCOPE: global
+        run: bash tests/smoke-install.sh
+
+      - name: Smoke install (project, commands-only)
+        env:
+          CLAUDE_HOME: ${{ runner.temp }}/vibekit-claude-project
+          VIBEKIT_SMOKE_MODE: commands-only
+          VIBEKIT_SMOKE_SCOPE: project
+        run: bash tests/smoke-install.sh
+
+  windows-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: PowerShell parse check
+        shell: pwsh
+        run: |
+          $files = @('install.ps1','doctor.ps1','uninstall.ps1','tests/smoke-install.ps1')
+          $fail = 0
+          foreach ($f in $files) {
+            $tokens = $null; $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              Write-Host "PARSE ERRORS in ${f}:"
+              $errors | ForEach-Object { Write-Host "  $_" }
+              $fail++
+            } else {
+              Write-Host "ok  $f"
+            }
+          }
+          if ($fail -gt 0) { exit 1 }
+
+      - name: Python compile check
+        shell: pwsh
+        run: python -m py_compile .claude/hooks/block-dangerous-git.py
+
+      - name: block-dangerous-git unit tests
+        shell: pwsh
+        run: python tests/test-block-dangerous-git.py
+
+      - name: Smoke install (global, commands-only)
+        shell: pwsh
+        env:
+          VIBEKIT_SMOKE_MODE: commands-only
+          VIBEKIT_SMOKE_SCOPE: global
+        run: |
+          $env:CLAUDE_HOME = Join-Path $env:RUNNER_TEMP 'vibekit-claude-global'
+          .\tests\smoke-install.ps1
+
+      - name: Smoke install (project, commands-only)
+        shell: pwsh
+        env:
+          VIBEKIT_SMOKE_MODE: commands-only
+          VIBEKIT_SMOKE_SCOPE: project
+        run: |
+          $env:CLAUDE_HOME = Join-Path $env:RUNNER_TEMP 'vibekit-claude-project'
+          .\tests\smoke-install.ps1

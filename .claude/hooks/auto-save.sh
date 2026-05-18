@@ -3,36 +3,42 @@
 # auto-save.sh — runs after Claude Code Edit/Write/MultiEdit when registered
 # in `full` install mode.
 #
-# IMPORTANT: this hook still runs `git add -A` on the working tree (it does NOT
-# rely on the Claude Code hook payload to identify which files were just
-# touched, since that schema is not guaranteed across versions). That means it
-# can stage unrelated changes. To make that less dangerous, the hook now
-# REFUSES to commit if any of the following are true:
+# Staging modes (HWAN_AUTOSAVE_STAGE_MODE, default: auto):
+#   auto     — try to read changed file paths from the hook payload (stdin
+#              JSON). If a non-empty, validated list is found, stage ONLY
+#              those paths. Otherwise fall back to guarded `git add -A`.
+#   payload  — require a valid payload file list; refuse to commit if absent.
+#   all      — skip payload parsing and use guarded `git add -A` directly.
 #
-#   - not inside a git repo
-#   - current branch is main/master
-#   - staged or working-tree changes include obvious secret/risky files
+# In every mode, the existing safeguards still apply before any commit:
+#
+#   - not inside a git repo                       → exit 0
+#   - current branch is main/master               → exit 0
+#   - risky file paths in change set              → refuse
 #     (.env, .env.*, *.pem, *.key, *.p12, *.pfx, id_rsa, id_ed25519,
 #      .claude/settings.json, .claude/settings.local.json)
-#   - diff contains obvious secret patterns
-#     (OPENAI_API_KEY, ANTHROPIC_API_KEY, BEGIN PRIVATE KEY, sk-)
-#   - changed file count exceeds HWAN_AUTOSAVE_MAX_FILES (default 30)
-#   - any files were deleted, unless HWAN_AUTOSAVE_ALLOW_DELETIONS=1
+#   - obvious secret patterns in diff             → refuse
+#     (OPENAI_API_KEY, ANTHROPIC_API_KEY, BEGIN PRIVATE KEY, sk-…)
+#   - change set > HWAN_AUTOSAVE_MAX_FILES (30)   → refuse
+#   - any deletions, unless HWAN_AUTOSAVE_ALLOW_DELETIONS=1
 #
-# Set HWAN_AUTOSAVE_DISABLE=1 to disable the hook entirely without uninstalling.
+# Kill switch: HWAN_AUTOSAVE_DISABLE=1 makes this hook exit immediately.
 #
-# If that tradeoff is wrong for you, install with `--mode safe` or
-# `--mode commands-only` instead.
+# WARNING: the `all` (and `auto` fallback) paths still stage the entire
+# working tree after the safeguards. Most users should stay on `--mode safe`.
 
-# Allow user kill switch.
 if [ "${HWAN_AUTOSAVE_DISABLE:-0}" = "1" ]; then
   exit 0
 fi
 
-# Must be inside a git work tree.
+# Read stdin payload once (may be empty).
+PAYLOAD=""
+if [ ! -t 0 ]; then
+  PAYLOAD="$(cat 2>/dev/null || true)"
+fi
+
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
-# Never auto-commit on protected branches.
 branch=$(git branch --show-current 2>/dev/null)
 case "$branch" in
   main|master|MAIN|MASTER)
@@ -41,20 +47,63 @@ case "$branch" in
     ;;
 esac
 
-# Nothing to do?
 if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard 2>/dev/null)" ]; then
   exit 0
 fi
 
-# Collect the candidate file list (working tree + index + untracked, excluding ignored).
-# Each porcelain line is "XY <path>" where XY are status codes. Paths with
-# unusual characters may appear quoted; that is fine for risky-name detection
-# and is far simpler than parsing NUL-separated output here.
+STAGE_MODE="${HWAN_AUTOSAVE_STAGE_MODE:-auto}"
+case "$STAGE_MODE" in
+  auto|payload|all) ;;
+  *)
+    echo "auto-save: invalid HWAN_AUTOSAVE_STAGE_MODE='$STAGE_MODE' (auto|payload|all)." >&2
+    exit 0
+    ;;
+esac
+
+# ---- Optional payload-aware staging ----
+PAYLOAD_PATHS_RAW=""
+if [ "$STAGE_MODE" != "all" ] && [ -n "$PAYLOAD" ]; then
+  PYTHON_BIN=""
+  for cand in python3 python; do
+    if command -v "$cand" >/dev/null 2>&1; then PYTHON_BIN="$cand"; break; fi
+  done
+  HELPER=""
+  for p in \
+    "$(dirname "$0")/auto-save-payload.py" \
+    "$HOME/.claude/hooks/auto-save-payload.py"; do
+    if [ -f "$p" ]; then HELPER="$p"; break; fi
+  done
+  if [ -n "$PYTHON_BIN" ] && [ -n "$HELPER" ]; then
+    # Helper prints NUL-separated repo-relative paths on success.
+    PAYLOAD_PATHS_RAW="$(printf '%s' "$PAYLOAD" | "$PYTHON_BIN" "$HELPER" 2>/dev/null || true)"
+  fi
+fi
+
+if [ "$STAGE_MODE" = "payload" ] && [ -z "$PAYLOAD_PATHS_RAW" ]; then
+  echo "auto-save: refusing — HWAN_AUTOSAVE_STAGE_MODE=payload but no valid payload file list found." >&2
+  exit 0
+fi
+
+USE_PAYLOAD=0
+if [ -n "$PAYLOAD_PATHS_RAW" ]; then
+  USE_PAYLOAD=1
+fi
+
+# ---- Compute the change set we'll evaluate safeguards against ----
+# In payload mode, that is the payload list intersected with git's view of
+# what's actually changed. In fallback, it's git's full porcelain view.
 changed_lines=$(git status --porcelain=v1 2>/dev/null | sed '/^$/d')
 if [ -z "$changed_lines" ]; then
   exit 0
 fi
-changed_count=$(printf '%s\n' "$changed_lines" | wc -l | tr -d ' ')
+
+if [ "$USE_PAYLOAD" -eq 1 ]; then
+  # Convert NUL-separated payload paths into newline-separated for matching.
+  paths=$(printf '%s' "$PAYLOAD_PATHS_RAW" | tr '\0' '\n' | sed '/^$/d')
+else
+  paths=$(printf '%s\n' "$changed_lines" | awk '{ s=substr($0,4); print s }')
+fi
+changed_count=$(printf '%s\n' "$paths" | wc -l | tr -d ' ')
 
 max_files="${HWAN_AUTOSAVE_MAX_FILES:-30}"
 if [ "$changed_count" -gt "$max_files" ] 2>/dev/null; then
@@ -62,18 +111,16 @@ if [ "$changed_count" -gt "$max_files" ] 2>/dev/null; then
   exit 0
 fi
 
-# Extract just the path portion (porcelain v1 with -z: first 3 chars are "XY ").
-paths=$(printf '%s\n' "$changed_lines" | awk '{ s=substr($0,4); print s }')
-
-# Refuse on deletions unless explicitly allowed.
-if [ "${HWAN_AUTOSAVE_ALLOW_DELETIONS:-0}" != "1" ]; then
+# Refuse on deletions (only meaningful in fallback mode; payload helper rejects
+# non-existent files already).
+if [ "$USE_PAYLOAD" -eq 0 ] && [ "${HWAN_AUTOSAVE_ALLOW_DELETIONS:-0}" != "1" ]; then
   if printf '%s\n' "$changed_lines" | awk '{print substr($0,1,2)}' | grep -E '^.D|^D.' >/dev/null 2>&1; then
     echo "auto-save: refusing — deletions detected. Set HWAN_AUTOSAVE_ALLOW_DELETIONS=1 to allow." >&2
     exit 0
   fi
 fi
 
-# Refuse on obvious secret / risky file paths.
+# Refuse on risky file paths.
 risky_match=$(printf '%s\n' "$paths" | grep -E -i \
   -e '(^|/)\.env(\..+)?$' \
   -e '(^|/)[^/]+\.(pem|key|p12|pfx)$' \
@@ -86,8 +133,8 @@ if [ -n "$risky_match" ]; then
   exit 0
 fi
 
-# Refuse on obvious secret patterns inside the diff (tracked + untracked).
-# We scan the combined diff plus untracked file contents (best-effort, capped).
+# Secret patterns in the (full) diff. Even in payload mode this is a cheap
+# extra check against accidental commits.
 secret_hit=0
 if git diff --no-color 2>/dev/null | grep -E -q '(OPENAI_API_KEY|ANTHROPIC_API_KEY|BEGIN PRIVATE KEY|sk-[A-Za-z0-9]{8,})'; then
   secret_hit=1
@@ -98,7 +145,6 @@ if [ "$secret_hit" -eq 0 ]; then
   fi
 fi
 if [ "$secret_hit" -eq 0 ]; then
-  # Untracked files: scan up to ~64KB each to keep this cheap.
   while IFS= read -r u; do
     [ -z "$u" ] && continue
     [ -f "$u" ] || continue
@@ -115,11 +161,25 @@ if [ "$secret_hit" -eq 1 ]; then
   exit 0
 fi
 
-# Summarize, then commit.
-echo "auto-save: branch=$branch files=$changed_count"
+if [ "$USE_PAYLOAD" -eq 1 ]; then
+  echo "auto-save: branch=$branch files=$changed_count (payload)"
+else
+  echo "auto-save: branch=$branch files=$changed_count (fallback: git add -A)"
+fi
 printf '%s\n' "$paths" | sed 's/^/  /'
 
-git add -A
+if [ "$USE_PAYLOAD" -eq 1 ]; then
+  # Stage only the payload-listed files.
+  # shellcheck disable=SC2086
+  while IFS= read -r p; do
+    [ -n "$p" ] && git add -- "$p" 2>/dev/null || true
+  done <<EOF
+$paths
+EOF
+else
+  git add -A
+fi
+
 if git diff --cached --quiet; then
   exit 0
 fi

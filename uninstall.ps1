@@ -6,17 +6,32 @@
 
 [CmdletBinding()]
 param(
-    [switch]$Yes
+    [switch]$Yes,
+    [ValidateSet('global','project')]
+    [string]$Scope = 'global',
+    [string]$ClaudeHome
 )
 
-if ($env:CLAUDE_HOME) {
-    $ClaudeHome = $env:CLAUDE_HOME
+if (-not $ClaudeHome) {
+    if ($Scope -eq 'project') {
+        $ClaudeHome = Join-Path (Get-Location).Path ".claude"
+    } elseif ($env:CLAUDE_HOME) {
+        $ClaudeHome = $env:CLAUDE_HOME
+    } else {
+        $ClaudeHome = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".claude"
+    }
+}
+
+if ($Scope -eq 'project') {
+    $Settings = Join-Path $ClaudeHome "settings.local.json"
 } else {
-    $ClaudeHome = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".claude"
+    $Settings = Join-Path $ClaudeHome "settings.json"
 }
 
 Write-Host "Vibekit uninstall plan:"
+Write-Host "  scope:       $Scope"
 Write-Host "  claude_home: $ClaudeHome"
+Write-Host "  settings:    $Settings"
 Write-Host "  - remove commands\hwan-refactor-*.md and commands\git-safe.md"
 Write-Host "  - remove hooks\block-dangerous-git.py, hooks\auto-save.sh, hooks\session-start.sh"
 Write-Host "  - remove vibekit-added entries from settings.json (backed up first)"
@@ -35,6 +50,7 @@ $targets = @(
     "commands\git-safe.md",
     "hooks\block-dangerous-git.py",
     "hooks\auto-save.sh",
+    "hooks\auto-save-payload.py",
     "hooks\session-start.sh"
 )
 $removed = 0
@@ -47,7 +63,6 @@ foreach ($rel in $targets) {
     }
 }
 
-$Settings = Join-Path $ClaudeHome "settings.json"
 if (Test-Path $Settings) {
     $Python = $null
     foreach ($cand in @('python','python3','py')) {
@@ -83,7 +98,7 @@ if not hooks and "hooks" in data: del data["hooks"]
 elif "hooks" in data: data["hooks"] = hooks
 with open(p, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2); f.write("\n")
-print("cleaned vibekit hook entries from settings.json")
+print(f"cleaned vibekit hook entries from {p}")
 '@
         $tmp = New-TemporaryFile
         Set-Content -Path $tmp.FullName -Value $py -Encoding UTF8

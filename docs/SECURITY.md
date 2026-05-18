@@ -67,10 +67,46 @@ Kill switch and tuning (environment variables read by `auto-save.sh`):
 | `HWAN_AUTOSAVE_DISABLE=1` | Hook exits immediately, never commits. |
 | `HWAN_AUTOSAVE_MAX_FILES=N` | Override the 30-file cap. |
 | `HWAN_AUTOSAVE_ALLOW_DELETIONS=1` | Allow commits that delete files. |
+| `HWAN_AUTOSAVE_STAGE_MODE=auto\|payload\|all` | Staging strategy. Default `auto`. |
+
+Staging modes (`HWAN_AUTOSAVE_STAGE_MODE`):
+
+- `auto` (default) — parse the Claude Code hook stdin payload. If a
+  validated, in-repo file list is found, stage only those files. Otherwise
+  fall back to guarded `git add -A`.
+- `payload` — require a payload file list; refuse to commit if absent or
+  invalid. Strictest mode; useful when you do not want any blanket staging.
+- `all` — skip payload parsing and use guarded `git add -A` directly
+  (pre-v0.1.3 behavior).
+
+Payload-aware staging is conservative: paths must resolve inside the git
+work tree, must currently exist as files, and known-payload fields are
+limited to `tool_input.{file_path, filePath, path, files, edits[].*}`.
+Anything outside that contract is rejected and the hook falls back (auto)
+or refuses (payload). Even with payload mode, all the other safeguards
+(branch, risky paths, secret patterns, file count) still apply.
 
 ### Global hook scope
 
-Hooks live in `~/.claude/hooks` and are wired up through `~/.claude/settings.json`, which is Claude Code's **global** config. A hook registered there fires for **every** Claude Code session on this user account, not only for projects in this directory. That is by design but worth knowing — if you share an account across many projects, all of them inherit these hooks. To avoid that entirely, install with `--mode commands-only`.
+Hooks live in `~/.claude/hooks` and are wired up through `~/.claude/settings.json`, which is Claude Code's **global** config. A hook registered there fires for **every** Claude Code session on this user account, not only for projects in this directory. That is by design but worth knowing — if you share an account across many projects, all of them inherit these hooks. To avoid that entirely, install with `--mode commands-only` or use **project scope** (below).
+
+### Project scope as an alternative
+
+`--scope project` (Bash) / `-Scope project` (PowerShell) installs commands,
+hooks, and settings into `./.claude` instead of `~/.claude`, and writes
+settings to `settings.local.json` to match Claude Code's machine-local
+convention. Hooks installed this way affect only that project. This is the
+recommended scope for cautious users, shared accounts, and teams.
+
+### Plugin detection caveat
+
+Doctor's check for `superpowers` and `compound-engineering` looks at
+`settings.json`, `settings.local.json`, and known plugin / skill directories
+under both `~/.claude` and `~/.codex`, plus the project-local `./.claude`.
+This is still a heuristic: presence of the substring in a settings file or a
+matching directory name suggests the plugin is installed, but doctor cannot
+guarantee it. Output uses "not detected by doctor" rather than "not
+installed" for that reason.
 
 ## What the `block-dangerous-git.py` hook actually blocks
 
