@@ -2,6 +2,15 @@
 
 This document explains, in plain terms, what the Vibekit installer changes on your machine, what it never does, and how to back out.
 
+## Quick trust summary
+
+- `commands-only` — safest. Slash commands only. No hooks. No `settings.json` changes.
+- `safe` — recommended. Adds two safety-only hooks. **Auto-commit is not enabled.**
+- `full` — power user only. Adds auto-save/auto-commit. Even with all safeguards, the fallback path stages the working tree. Read the rest of this doc before enabling.
+- **Global** hooks affect every Claude Code session on this account. **Project scope** (`--scope project`) confines everything to `./.claude` and is the safer choice for shared accounts and team repos.
+- The installer **never** pushes, creates PRs, merges, or deploys.
+- `--bootstrap` / `-Bootstrap` and `doctor --fix` / `-Fix` are **opt-in**; without them the installer does not install any external tool.
+
 The kit is a local quality-gate layer for Claude Code (and optionally Codex CLI). It is not an autonomous agent. Inspect the scripts before running them if you have any concern — they are short.
 
 ## What the installer modifies

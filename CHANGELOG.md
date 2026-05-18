@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — Unreleased
+
+Onboarding and trust polish release. No changes to install behavior, hook
+logic, or what the dangerous-git hook blocks. Documentation, README first
+impression, and visual onboarding only.
+
+### Added
+- README TL;DR block with copy-paste install + first audit-only command.
+- Mermaid diagrams in README for the quality-gate flow and install-mode
+  progression. Source files under [`docs/assets/`](docs/assets/) for reuse
+  outside GitHub.
+- CI smoke-tests status badge and a latest-release badge in both READMEs.
+- Extended [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md): illustrative
+  audit-only outputs for all four gates (PRD, Code, Design, Release), a
+  plain-English "How to interpret PARTIAL from doctor" section, and a
+  "first 10 minutes" walkthrough.
+- New onboarding sections in [`docs/INSTALLATION.md`](docs/INSTALLATION.md):
+  "Which mode should I choose?", "Recommended path for first-time users",
+  "Global vs project-scoped install", "What PARTIAL means", "What to do if
+  doctor says ACTION REQUIRED", "How to update an existing install",
+  "When to use --bootstrap", "When NOT to use full mode".
+- Quick trust summary at the top of [`docs/SECURITY.md`](docs/SECURITY.md).
+- New [`docs/GITHUB-PUBLISHING.md`](docs/GITHUB-PUBLISHING.md): release
+  checklist, recommended topics, badge update notes, post-release smoke
+  test reminder.
+- Updated [`README.ko.md`](README.ko.md) to mirror the polish (TL;DR,
+  badges, Mermaid, PARTIAL note).
+
+### Changed
+- README opening line now leads with positioning ("Not another AI coding
+  agent") instead of the v0.1.0 release tag.
+- `ROADMAP.md` shows v0.2.0 in progress and adds a conservative v1.0.0
+  checklist (external user feedback, stable install across OSes, docs
+  verified by a new user, no critical install regressions, written
+  support/security policy).
+
+### Not changed
+- `install.{sh,ps1}`, `doctor.{sh,ps1}`, `uninstall.{sh,ps1}`, hook
+  scripts, tests, CI workflow. Behavior is identical to v0.1.3.
+
 ## [0.1.3] — 2026-05-18
 
 Quality and safety improvements for the installer and hooks. No changes to

@@ -55,9 +55,26 @@ This roadmap is a sketch, not a commitment. Items move based on real usage.
   `settings.json` and `settings.local.json`, plus `~/.codex` directories.
   Wording reflects that it is still a heuristic.
 
+## v0.2.0 — In progress (onboarding & trust polish)
+
+Documentation-only release. No install behavior changes.
+
+- README first-screen polish: TL;DR block, CI badge, latest-release badge,
+  Mermaid workflow + install-mode diagrams.
+- Visual onboarding assets under `docs/assets/` (Mermaid sources).
+- Extended `docs/EXAMPLE-RUN.md` with audit-only illustrations for all
+  four gates, a "How to interpret PARTIAL from doctor" section, and a
+  "first 10 minutes" walkthrough.
+- New onboarding sections in `docs/INSTALLATION.md` (Which mode to choose,
+  what PARTIAL means, what to do if ACTION REQUIRED, how to update, when
+  not to use full mode).
+- Quick trust summary added to `docs/SECURITY.md`.
+- New `docs/GITHUB-PUBLISHING.md` with release/topic/badge checklist.
+- README.ko aligned with the polish.
+
 ## v0.1.x — Hardening (still open)
 
-Targeted follow-ups before a v0.2.0 minor bump:
+Targeted follow-ups, no specific version commitment:
 
 - **Cross-platform CI for safe/full install modes**, not only
   commands-only. Currently safe/full are exercised by local validation.
@@ -65,6 +82,26 @@ Targeted follow-ups before a v0.2.0 minor bump:
   the payload parser is conservative across versions.
 - **First-class project-mode init** (e.g. `vibekit init` style helper that
   picks scope, mode, and settings.local-vs-settings.json).
+
+## v1.0.0 — Stability criteria (not committed)
+
+v1.0.0 is intentionally not scheduled. The bar is conservative and based
+on outside signal, not internal confidence. Before tagging v1.0.0:
+
+- [ ] Real install/usage feedback from at least a few external users on
+      macOS, Linux/WSL, and Windows.
+- [ ] Stable install behavior across Windows / macOS / Linux for at
+      least one minor cycle (no install regressions filed against the
+      preceding two releases).
+- [ ] Onboarding docs verified by someone who has never used the kit
+      before, end-to-end, on each supported platform.
+- [ ] No critical install or hook regressions filed for v0.2.x.
+- [ ] Written support and security policy: how to report a vulnerability,
+      how response times work, what is in/out of scope.
+- [ ] Public examples or write-ups that aren't from the maintainer alone.
+
+Until those land, treat the project as 0.x. Calling it production-ready or
+v1 before then would be overclaiming.
 
 ## Future — Nice to have
 

@@ -1,0 +1,7 @@
+%% Install mode progression. commands-only is safest; safe is recommended;
+%% full is power-user mode. Used in README.md and docs/INSTALLATION.md.
+flowchart LR
+    A["commands-only<br/>slash commands only"] --> B["safe<br/>+ safety hooks"]
+    B --> C["full<br/>+ auto-save/commit"]
+    classDef rec fill:#e0f0ff,stroke:#3070b0;
+    class B rec;
