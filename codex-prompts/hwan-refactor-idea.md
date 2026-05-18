@@ -15,9 +15,6 @@ User writes the PRD themselves. This command validates it using gstack + BMAD sk
 - `--include-p2`: include P2 items in execution (default: only P0/P1)
 - `--resume`: resume from last incomplete execution
 
-# Recommended Model
-**Claude Opus** for this command. The adversarial and edge-case prompts below use structured output schemas and severity rubrics that benefit significantly from Opus's deeper reasoning.
-
 # Prerequisites
 
 **Installation paths** (Windows):
