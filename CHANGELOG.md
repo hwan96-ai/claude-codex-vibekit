@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] — Unreleased
+
+README visual polish. Documentation-only. No installer, hook, script,
+slash-command, CI, or `SHA256SUMS` behavior changes.
+
+### Changed
+- `README.md` first screen restructured for a cleaner landing-page feel:
+  - New **"The 30-second version"** bullet list right under TL;DR (you
+    direct the work, Claude Code generates code, Vibekit adds local
+    gates, start with `--audit-only`, no automatic push/PR/merge/deploy).
+  - The top **Mermaid workflow diagram is now wrapped in `<details>`**
+    so it does not dominate the fold. The text fallback
+    (`PRD → Code → Design → Release`) stays visible at all times.
+  - New **Before / After** comparison table (output, files touched,
+    commits/push, repeatability) immediately after the workflow line.
+  - "Current release verification" header bumped from v0.2.1 → v0.2.3,
+    and the `git checkout v0.2.1` examples in the Verify-release-files
+    section updated to `git checkout v0.2.3` so the snippets match the
+    actual current tag.
+  - New **"Recommended next docs"** mini-index above the full
+    Documentation list (Installation → Example run → Security →
+    Comparison) so first-time readers have a guided path.
+- `README.ko.md` mirrors the same shape in natural Korean (30초 요약,
+  Before/After 표, `<details>` 다이어그램, v0.2.3 검증 헤더,
+  다음에 볼 문서).
+
+### Added
+- `docs/assets/doctor-ready.svg` — a small text-based SVG terminal card
+  showing an illustrative `doctor.sh` run (`READY`, commands ok, hooks
+  verified, optional integrations partial). Referenced inline in the
+  English and Korean "Current release verification" sections. No binary
+  screenshots, no external image hosting.
+
+### Verified during this polish
+- Repo-wide grep for `YOUR-USERNAME`, `[YOUR NAME]`, `d octor`, and
+  `.\d octor` against the polished tree: no active occurrences in
+  README content; only historical audit-finding references in
+  `CHANGELOG.md` / `ROADMAP.md` remain (same as v0.2.3 baseline).
+- All inline tag references in `README.md` and `README.ko.md` now read
+  `v0.2.3` rather than `v0.2.1`. The `Latest release` shields.io badge
+  continues to resolve dynamically.
+- Overclaim phrase scan in both READMEs: no "production-ready",
+  "battle-tested", "verified at every step", "mistakes don't repeat",
+  "safety without slowing down", or "one command install" (English or
+  Korean equivalents).
+- `docs/assets/doctor-ready.svg` is a text SVG (`<?xml ... ?>` +
+  `<svg>` root, well-formed, no embedded raster).
+
+### Not changed
+- `install.sh`, `install.ps1`, `doctor.sh`, `doctor.ps1`, uninstall
+  scripts, hooks, slash commands, tests, CI workflow, `SHA256SUMS`,
+  release tags, and the published GitHub releases for v0.2.1 / v0.2.2
+  / v0.2.3.
+
 ## [0.2.3] — 2026-05-18
 
 README hotfix. Documentation-only. No installer, hook, script, or

@@ -97,6 +97,31 @@ Addresses three findings from the v0.2.0 release audit.
   as STALE (already fixed in v0.2.0); confirmed by repo-wide grep on the
   v0.2.1 branch.
 
+## v0.2.4 — In progress (README visual polish)
+
+Documentation-only. No installer, hook, script, slash-command, CI, or
+`SHA256SUMS` changes. Focus is reducing the "long accumulated doc" feel
+of the landing page.
+
+- New "The 30-second version" bullet list directly under TL;DR so a
+  first-time reader sees the value contract (you direct, Claude Code
+  generates, Vibekit gates, audit-only first, no automatic
+  push/PR/merge/deploy) without scrolling.
+- Top Mermaid workflow diagram moved into a `<details>` block; the
+  `PRD → Code → Design → Release` text line stays visible at all times.
+- New "Before / After" comparison table (output, files touched,
+  commits/push, repeatability) so the value is concrete instead of
+  abstract.
+- "Current release verification" header and example `git checkout`
+  commands bumped from v0.2.1 → v0.2.3 to match the actual current tag.
+- New "Recommended next docs" mini-index above the full Documentation
+  list (Installation → Example run → Security → Comparison).
+- New text SVG terminal card at `docs/assets/doctor-ready.svg` shown
+  inline in the release-verification section. No binary screenshots,
+  no external image hosting.
+- README.ko aligned to the same shape with natural Korean.
+- v1.0.0 stability criteria unchanged.
+
 ## v0.2.3 — In progress (README hotfix)
 
 Documentation-only. No installer, hook, script, or slash-command

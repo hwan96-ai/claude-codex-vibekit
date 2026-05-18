@@ -27,6 +27,20 @@ Claude Code 안에서 먼저 audit-only로 게이트를 시도해 보세요:
 
 audit-only는 `SUMMARY.md`만 남기고 멈춥니다. 파일 수정 없음, 커밋 없음, 푸시 없음.
 
+## 30초 요약
+
+- **방향은 당신이 잡습니다.** PRD, 범위, 머지 결정은 모두 사람 몫.
+- **코드는 Claude Code가 도와 씁니다.** Vibekit이 기능을 대신 짜주지 않습니다.
+- **Vibekit은 `main`/릴리스 직전에 로컬 게이트**를 더할 뿐입니다.
+- **먼저 `--audit-only`로** 시작하세요. 모든 게이트에 있고, 수정·커밋·푸시를 하지 않습니다.
+- **자동 푸시·PR·머지·배포는 어떤 모드에서도 없음.**
+
+**흐름:** **PRD → 코드 → 디자인 → 릴리스.** 각 게이트는 Claude Code 안에서
+실행하는 슬래시 커맨드이고, 모든 게이트에 audit-only 모드가 있습니다.
+
+<details>
+<summary>워크플로우 다이어그램</summary>
+
 ```mermaid
 flowchart LR
     PRD["PRD Gate<br/>/hwan-refactor-idea"] --> Code["Code Gate<br/>/hwan-refactor-code"]
@@ -34,9 +48,19 @@ flowchart LR
     Design --> Release["Release Gate<br/>/hwan-refactor-git"]
 ```
 
-> 텍스트 대체: **PRD 게이트 → 코드 게이트 → 디자인 게이트 → 릴리스 게이트.**
-> 각 게이트는 Claude Code 안에서 실행하는 슬래시 커맨드이고, 모든 게이트에
-> audit-only 모드가 있습니다.
+</details>
+
+## Before / After
+
+| | Vibekit 없이 | Vibekit + audit-only |
+|---|---|---|
+| **결과물** | AI가 파일을 바꿔둠. 리스크 불분명. | P0/P1/P2/P3 정리된 게이트 요약. |
+| **수정된 파일** | AI가 정한 만큼. | 없음 (audit-only는 `SUMMARY.md`만 작성). |
+| **커밋 / 푸시** | 이미 일어났을 수도 있음. | 자동 없음. 결정은 본인. |
+| **반복 가능성** | 세션마다 백지에서 시작. | 프로젝트 학습 노트가 이어집니다. |
+
+기본은 audit-only입니다. 자동 수정·자동 커밋은 [설치](#설치) 섹션과
+[`docs/SECURITY.md`](docs/SECURITY.md)에 정리된 옵트인 모드입니다.
 
 자세한 흐름과 doctor의 `PARTIAL` 의미는 [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md), [`docs/INSTALLATION.md`](docs/INSTALLATION.md)를 참고하세요.
 
@@ -83,9 +107,13 @@ SUMMARY.md 작성됨
 네 게이트의 전체 예시 흐름은 [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md)를
 참고하세요.
 
-## 현재 릴리스 검증 (v0.2.1)
+## 현재 릴리스 검증 (v0.2.3)
 
-아래는 이 저장소의 v0.2.1 태그에 대해 통과한 체크입니다. 특정 릴리스에
+<p align="center">
+  <img src="docs/assets/doctor-ready.svg" alt="doctor.sh 터미널 출력: READY, commands ok, hooks verified, optional integrations partial" width="520">
+</p>
+
+아래는 이 저장소의 v0.2.3 태그에 대해 통과한 체크입니다. 특정 릴리스에
 대한 사실이고, 앞으로의 모든 버전에 대한 일반적 주장이 아닙니다:
 
 - 새 클론 + `--mode safe` 설치가 깨끗한 계정에서 오류 없이 완료됩니다.
@@ -253,11 +281,11 @@ Phase 7+: 이번 세션 학습 캡처
 태그를 받은 뒤 검증하려면:
 
 ```bash
-git checkout v0.2.1
+git checkout v0.2.3
 bash scripts/generate-checksums.sh --check
 ```
 ```powershell
-git checkout v0.2.1
+git checkout v0.2.3
 .\scripts\generate-checksums.ps1 -Check
 ```
 
@@ -321,6 +349,15 @@ claude
 # 7. PR 생성/머지 결정은 본인이
 gh pr create
 ```
+
+## 다음에 볼 문서
+
+문서를 순서대로 따라가고 싶다면:
+
+1. [설치](docs/INSTALLATION.md) — 모드, 스코프, 부트스트랩 상세.
+2. [예시 실행](docs/EXAMPLE-RUN.md) — 각 게이트가 어떻게 흘러가는지.
+3. [보안](docs/SECURITY.md) — `safe` / `full`이 실제로 바꾸는 것.
+4. [비교](docs/COMPARISON.md) — Cursor / Aider / Cline / Continue 와의 위치 차이.
 
 ## 문서
 

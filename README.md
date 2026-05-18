@@ -27,6 +27,20 @@ Then, inside Claude Code, run a gate in audit-only mode first:
 
 Audit-only writes `SUMMARY.md` and stops. No file edits. No commits. No push.
 
+## The 30-second version
+
+- **You direct the work.** PRD, scope, and merge decisions stay with you.
+- **Claude Code helps generate code.** Vibekit does not write features for you.
+- **Vibekit adds local gates** before code lands on `main` or a release.
+- **Start with `--audit-only`.** Every gate has it; it never edits, commits, or pushes.
+- **No automatic push, PR, merge, or deploy.** Ever.
+
+**Workflow:** **PRD → Code → Design → Release.** Each gate is a slash command
+you run inside Claude Code. Audit-only mode is available on every gate.
+
+<details>
+<summary>Workflow diagram</summary>
+
 ```mermaid
 flowchart LR
     PRD["PRD Gate<br/>/hwan-refactor-idea"] --> Code["Code Gate<br/>/hwan-refactor-code"]
@@ -34,9 +48,20 @@ flowchart LR
     Design --> Release["Release Gate<br/>/hwan-refactor-git"]
 ```
 
-> Text fallback: **PRD gate → Code gate → Design gate → Release gate.** Each gate
-> is a slash command you run inside Claude Code. Audit-only mode is available on
-> every gate.
+</details>
+
+## Before / After
+
+| | Before Vibekit | After Vibekit (audit-only) |
+|---|---|---|
+| **Output** | AI changed files; unclear risk. | Gate summary with P0/P1/P2/P3 findings. |
+| **Files touched** | Whatever AI decided. | None (audit-only writes `SUMMARY.md`). |
+| **Commits / push** | Possibly already happened. | Never automatic; you decide. |
+| **Repeatable** | Each session starts from scratch. | Per-project learning notes carry over. |
+
+Audit-only is the default starting point. Auto-fix and auto-commit are opt-in
+modes documented under [Install](#install) and
+[`docs/SECURITY.md`](docs/SECURITY.md).
 
 ## Why this exists
 
@@ -80,9 +105,13 @@ Wrote: SUMMARY.md
 See [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md) for a full illustrative
 walkthrough of all four gates.
 
-## Current release verification (v0.2.1)
+## Current release verification (v0.2.3)
 
-The following checks pass for the v0.2.1 tag of this repository. They are
+<p align="center">
+  <img src="docs/assets/doctor-ready.svg" alt="doctor.sh terminal output showing READY: commands ok, hooks verified, optional integrations partial" width="520">
+</p>
+
+The following checks pass for the v0.2.3 tag of this repository. They are
 release-specific, not a general claim about all future versions:
 
 - Fresh clone + `--mode safe` install completes without errors on a clean
@@ -255,11 +284,11 @@ files (install / doctor / uninstall scripts on both platforms, all four hooks,
 all five slash commands). To verify after cloning a tag:
 
 ```bash
-git checkout v0.2.1
+git checkout v0.2.3
 bash scripts/generate-checksums.sh --check
 ```
 ```powershell
-git checkout v0.2.1
+git checkout v0.2.3
 .\scripts\generate-checksums.ps1 -Check
 ```
 
@@ -353,6 +382,15 @@ git safety hooks → prevent accidents
    ↓
 Reviewed code in a feature branch (you decide to merge)
 ```
+
+## Recommended next docs
+
+If you just want a path through the docs, in order:
+
+1. [Installation](docs/INSTALLATION.md) — modes, scope, bootstrap details.
+2. [Example run](docs/EXAMPLE-RUN.md) — what each gate looks like end-to-end.
+3. [Security](docs/SECURITY.md) — what `safe` and `full` actually change.
+4. [Comparison](docs/COMPARISON.md) — where Vibekit fits vs. Cursor / Aider / Cline / Continue.
 
 ## Documentation
 
