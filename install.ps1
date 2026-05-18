@@ -111,7 +111,7 @@ if ($Mode -eq 'commands-only') {
     Write-Host "Next:"
     Write-Host "  - Run .\doctor.ps1 to verify."
     Write-Host "  - Open Claude Code and try /hwan-refactor-idea --audit-only on a test project."
-    return
+    exit 0
 }
 
 # ---------- 3. Hooks ----------
@@ -363,3 +363,4 @@ Write-Host "Next:"
 Write-Host "  - Run .\doctor.ps1 to verify  (use -Fix to attempt safe automatic fixes)."
 Write-Host "  - Restart Claude Code so it reloads commands and settings."
 Write-Host "  - Try a gate in audit-only mode first: /hwan-refactor-idea --audit-only"
+exit 0

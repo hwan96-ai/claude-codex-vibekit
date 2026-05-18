@@ -32,7 +32,7 @@ mkdir -p "$CLAUDE_HOME"
 # independent of the current working directory and never accidentally touches
 # the kit's own .claude/.
 INSTALL_ARGS="--mode $MODE --claude-home $CLAUDE_HOME"
-DOCTOR_ARGS="--claude-home=$CLAUDE_HOME"
+DOCTOR_ARGS="--claude-home=$CLAUDE_HOME --ci"
 if [ "$SCOPE" = "project" ]; then
   INSTALL_ARGS="$INSTALL_ARGS --scope project --yes"
   DOCTOR_ARGS="$DOCTOR_ARGS --scope=project"

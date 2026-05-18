@@ -37,15 +37,15 @@ try {
         } else {
             & (Join-Path $repoRoot 'install.ps1') -Mode $mode -ClaudeHome $env:CLAUDE_HOME
         }
-        if ($LASTEXITCODE -ne 0) {
+        if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
             Write-Error "smoke: install.ps1 exited $LASTEXITCODE"
             exit 1
         }
 
         if ($scope -eq 'project') {
-            & (Join-Path $repoRoot 'doctor.ps1') -Scope project -ClaudeHome $env:CLAUDE_HOME
+            & (Join-Path $repoRoot 'doctor.ps1') -Scope project -ClaudeHome $env:CLAUDE_HOME -CI
         } else {
-            & (Join-Path $repoRoot 'doctor.ps1') -ClaudeHome $env:CLAUDE_HOME
+            & (Join-Path $repoRoot 'doctor.ps1') -ClaudeHome $env:CLAUDE_HOME -CI
         }
         $doctorRc = $LASTEXITCODE
         Write-Host "smoke: doctor rc=$doctorRc"
@@ -79,3 +79,4 @@ foreach ($f in $expected) {
 }
 if ($missing -gt 0) { exit 1 }
 Write-Host "smoke: PASS ($cmdDir has all 5 commands; doctor rc=$doctorRc)"
+exit 0

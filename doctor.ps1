@@ -9,6 +9,7 @@
 param(
     [switch]$Fix,
     [switch]$Yes,
+    [switch]$CI,
     [ValidateSet('global','project')]
     [string]$Scope = 'global',
     [string]$ClaudeHome
@@ -92,6 +93,10 @@ if ($nodeCmd) {
 
 if (Get-Command claude -ErrorAction SilentlyContinue) {
     OK "claude CLI found"
+} elseif ($CI) {
+    WARN "claude CLI not found (allowed in CI smoke mode)"
+    $optionalMissing++
+    AddStep "install Claude Code (skipped in CI): irm https://claude.ai/install.ps1 | iex"
 } else {
     MISS "claude CLI: not found"
     $requiredMissing++

@@ -28,21 +28,27 @@ FIX=0
 FIX_YES=0
 SCOPE="global"
 CLAUDE_HOME_ARG=""
+CI_MODE=0
 
 for arg in "$@"; do
   case "$arg" in
     --fix) FIX=1 ;;
     --yes|-y) FIX_YES=1 ;;
+    --ci) CI_MODE=1 ;;
     --scope=project) SCOPE="project" ;;
     --scope=global)  SCOPE="global" ;;
     --claude-home=*) CLAUDE_HOME_ARG="${arg#*=}" ;;
     -h|--help)
       cat <<EOF
-Usage: $0 [--fix] [--yes] [--scope global|project] [--claude-home=<path>]
+Usage: $0 [--fix] [--yes] [--ci] [--scope global|project] [--claude-home=<path>]
 
   --fix             Attempt safe automatic install for missing deps with
                     clear CLI install flows (gstack).
   --yes             Non-interactive (auto-confirm prompts in --fix mode).
+  --ci              CI smoke mode. Missing Claude CLI is downgraded to
+                    PARTIAL instead of ACTION REQUIRED so CI runners that
+                    don't have Claude Code installed can still validate the
+                    installer + doctor wiring.
   --scope project   Inspect project-local ./.claude instead of global.
   --claude-home     Explicit Claude home directory.
 EOF
@@ -122,6 +128,10 @@ fi
 
 if command -v claude >/dev/null 2>&1; then
   ok "claude CLI found"
+elif [ "$CI_MODE" -eq 1 ]; then
+  warn "claude CLI not found (allowed in CI smoke mode)"
+  optional_missing=$((optional_missing+1))
+  add_step "install Claude Code (skipped in CI): curl -fsSL https://claude.ai/install.sh | bash"
 else
   miss "claude CLI: not found"
   required_missing=$((required_missing+1))
