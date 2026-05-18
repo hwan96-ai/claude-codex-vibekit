@@ -86,6 +86,9 @@ Blocked:
 - `git clean -f` / `-fd` / `-xdf` / `--force` (any variant with the force flag)
 - `git checkout -- .` (discards all local changes)
 - `git push <remote> --delete <main|master>` and `git push <remote> :<main|master>`
+- `git push <remote> +<refspec>` — any refspec prefixed with `+` is a
+  force-update and is treated as a force push (e.g. `+main`, `+HEAD:main`,
+  `+feature:main`, `+refs/heads/feature:refs/heads/main`)
 - `git branch -D <name>`
 - `git commit --amend`
 - `git rebase` while the current branch is `main` / `master`

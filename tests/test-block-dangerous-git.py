@@ -30,12 +30,15 @@ spec.loader.exec_module(mod)  # type: ignore[union-attr]
 
 ALLOWED_ON_FEATURE = [
     "git push origin main",
+    "git push origin master",
     "git push -u origin main",
     "git push",
     "git push origin HEAD:main",
+    "git push origin feature:main",
     "git push origin v0.1.2",
     "git push origin --tags",
     "git push -u origin feat/example",
+    "git push origin feat/foo",
     "git status",
     "git commit -m 'fix main bug'",  # word "main" in commit message
     "git merge feature/x",
@@ -49,8 +52,6 @@ BLOCKED_ANYWHERE = [
     "git push --force-with-lease",
     "git push --force-with-lease=origin/main",
     "git push origin main --force",
-    "git push origin +main",  # force-push via refspec is intentionally NOT
-    # claimed as blocked here — keep this list to what we *do* block.
     "git reset --hard",
     "git reset --hard HEAD~1",
     "git clean -f",
@@ -61,16 +62,20 @@ BLOCKED_ANYWHERE = [
     "git push origin --delete main",
     "git push origin :main",
     "git push origin --delete master",
+    # Force-update refspecs (the '+' prefix forces a non-fast-forward update).
+    "git push origin +main",
+    "git push origin +master",
+    "git push origin +HEAD:main",
+    "git push origin +feature:main",
+    "git push origin +feature:master",
+    "git push origin +refs/heads/feature:refs/heads/main",
+    "git push origin +refs/heads/feature:refs/heads/master",
     "git branch -D feature/foo",
     "git commit --amend",
     "git commit --amend -m 'oops'",
     "git checkout -- .",
     "rm -rf /",
 ]
-
-# The "+main" refspec case is a known soft-spot; remove it from the must-block
-# list (we only block the unambiguous shapes).
-BLOCKED_ANYWHERE = [c for c in BLOCKED_ANYWHERE if c != "git push origin +main"]
 
 BLOCKED_ON_PROTECTED = [
     ("git commit -m 'wip'", "main"),

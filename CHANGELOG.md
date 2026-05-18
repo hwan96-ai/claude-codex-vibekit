@@ -22,6 +22,9 @@ and history-rewriting git operations without blocking normal pushes.
 - Added explicit blocks for `git push origin --delete <protected>`,
   `git push origin :<protected>`, `git branch -D`, `git commit --amend`,
   and `git rebase` while on `main`/`master`.
+- Force-update refspecs are now blocked: any `git push` refspec starting
+  with `+` (e.g. `+main`, `+HEAD:main`, `+feature:main`,
+  `+refs/heads/feature:refs/heads/main`) is treated as a force push.
 - Conservative regex fallback retained for cases where shlex tokenization
   fails on unusual shell syntax.
 

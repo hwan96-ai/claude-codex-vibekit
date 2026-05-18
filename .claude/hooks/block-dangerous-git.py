@@ -127,6 +127,15 @@ def classify(git_args: List[str], branch: str) -> Tuple[bool, Optional[str]]:
         flag = _has_force_flag(rest)
         if flag is not None:
             return True, f"git push {flag} (원격 강제 덮어쓰기)"
+        # Force-update refspec: any non-option token starting with '+'
+        # (e.g. `+main`, `+HEAD:main`, `+feature:main`,
+        # `+refs/heads/feature:refs/heads/main`).
+        for a in rest:
+            if a.startswith("+") and len(a) > 1 and not a.startswith("-"):
+                return True, (
+                    f"Blocked force push refspec '{a}'. "
+                    f"Remove '+' or use a safe push."
+                )
         if "--delete" in rest:
             idx = rest.index("--delete")
             for tgt in rest[idx + 1 :]:
