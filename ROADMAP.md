@@ -26,6 +26,17 @@ This roadmap is a sketch, not a commitment. Items move based on real usage.
   (unless opted in), or when the change set exceeds a conservative threshold.
   Still uses `git add -A` after checks pass — documented as such.
 
+## v0.1.2 — In progress
+
+- **Refined dangerous-git hook push detection.** `block-dangerous-git.py` now
+  uses token-based parsing (`shlex`) and current-branch detection instead of
+  string-matching `main` in the command. Normal non-force pushes to `main`
+  (`git push origin main`, `git push -u origin main`, tag pushes) are no
+  longer blocked. Force pushes, `git reset --hard`, dangerous `git clean`,
+  protected-branch deletion, `git commit --amend`, and direct commits on
+  `main`/`master` remain blocked. Covered by
+  `tests/test-block-dangerous-git.py`.
+
 ## v0.1.x — Hardening (still open)
 
 Targeted follow-ups before a v0.2.0 minor bump:
