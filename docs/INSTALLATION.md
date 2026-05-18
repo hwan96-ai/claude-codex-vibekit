@@ -83,6 +83,64 @@ Stay away from `--mode full` if any of the following apply:
 
 `safe` is the recommended default. `full` is a power-user mode and the installer warns explicitly before enabling it.
 
+## Install from a tag (recommended for production use)
+
+Tagged releases (e.g. `v0.2.1`) are immutable and ship with a verifiable
+`SHA256SUMS`. Prefer them over a moving `main`:
+
+```bash
+git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
+cd claude-codex-vibekit
+git checkout v0.2.1
+bash scripts/generate-checksums.sh --check   # PowerShell: .\scripts\generate-checksums.ps1 -Check
+./install.sh --mode safe
+```
+
+If `--check` reports a mismatch on a freshly cloned tag, **do not run the
+installer** — re-clone or report the issue. A mismatch means either the
+clone was corrupted in transit or the published file set does not match
+the published checksums.
+
+## What the installer verifies after copying hooks
+
+In `safe` and `full` modes, the installer runs `[4.5] Verifying installed
+hooks (post-copy runtime smoke)` after copying hook files and merging
+settings. It checks:
+
+1. Every required hook file exists on disk where settings.json points.
+2. Each Python hook compiles under your Python interpreter (`py_compile`).
+3. Each shell hook passes `bash -n` syntax check, where bash is available.
+   On Windows without bash this is a warning, not a failure.
+4. `block-dangerous-git.py` actually behaves: a harmless `git push origin
+   main` exits 0 (allow), a `git push --force` exits 2 (block).
+5. Every hook command path inside `settings.json` / `settings.local.json`
+   resolves to a real file on disk.
+
+If any check fails the installer exits non-zero and does not claim success.
+
+## What to do if hook verification fails
+
+The installer prints OS-specific suggestions when it refuses. Most common
+causes:
+
+- **macOS** — Gatekeeper quarantine on the freshly copied files:
+  `xattr -l ~/.claude/hooks/*`. Remove with `xattr -dr com.apple.quarantine
+  ~/.claude/hooks` after auditing the contents.
+- **Windows** — Defender or another antivirus may quarantine or block
+  execution of `~/.claude/hooks`. Check the antivirus quarantine log, add
+  an allowlist exception for that folder, then rerun the installer.
+- **Linux** — SELinux or AppArmor enforcement on `~/.claude`. Inspect
+  audit logs and adjust the policy or move `CLAUDE_HOME` to a permitted
+  path.
+- **Python missing or on the wrong PATH** — install Python 3 and rerun.
+- **Settings path mismatch** — if you moved `~/.claude` after install,
+  rerun the installer so the new absolute paths are written to
+  `settings.json`.
+
+The same checks live in `doctor.sh` / `doctor.ps1` under
+`[hook runtime verification]`, so you can rerun them at any time without
+reinstalling.
+
 ## Prerequisites
 
 | Tool | Required | Notes |

@@ -192,6 +192,87 @@ Merge logic (Python, not shell string manipulation):
 
 This removes the slash commands and hook scripts Vibekit installed, backs up `settings.json`, and strips out only the hook entries Vibekit added. Your `learnings/` directory is preserved; delete manually if desired.
 
+## Supply-chain limitations and release integrity
+
+Vibekit ships a `SHA256SUMS` file at the repository root covering the 15
+release-relevant files (install / doctor / uninstall scripts on both
+platforms, all four hooks, all five slash commands). Two cross-platform
+scripts regenerate or verify it:
+
+- `scripts/generate-checksums.sh` (Bash, falls back to `shasum -a 256` on
+  macOS if `sha256sum` is absent).
+- `scripts/generate-checksums.ps1` (PowerShell, uses `Get-FileHash`).
+
+Both produce **byte-identical** output (`<sha256>  <relative/path>`, two
+spaces, lowercase hash, forward-slash paths). To verify a fresh clone:
+
+```bash
+git checkout v0.2.1
+bash scripts/generate-checksums.sh --check
+```
+
+**What `SHA256SUMS` does protect against**
+
+- Download-path tampering (corrupt mirror, MITM during clone).
+- Accidental file corruption (partial clone, disk error, encoding rewrite).
+- Local tampering you want to detect after install (rerun `--check` from a
+  clean copy).
+
+**What `SHA256SUMS` does NOT protect against**
+
+- A compromised repository owner account that publishes a malicious tag
+  alongside a malicious `SHA256SUMS`. The file is self-attested by the
+  owner; it is not a third-party signature.
+- A compromised GitHub release page where both the file and the published
+  hashes are replaced together.
+- Vulnerabilities in upstream tools the kit invokes (gstack, BMAD,
+  superpowers, compound-engineering, Codex CLI, Claude Code itself).
+
+The practical upgrade is: **prefer a tagged release over a moving `main`**.
+Tags are immutable references; you can verify the same SHA256SUMS on every
+clone you make of that tag.
+
+## Hook runtime verification
+
+Copying a hook file is not the same as having a working hook. OS security
+tools — Gatekeeper quarantine on macOS, Windows Defender, SELinux/AppArmor
+on Linux — can silently quarantine or block execution after a successful
+`cp` or `Copy-Item`. The installer and doctor cannot fully control those
+tools from userspace, but they can verify that the installed files actually
+behave as expected.
+
+Both `install.sh` and `install.ps1` now run `[4.5] Verifying installed
+hooks (post-copy runtime smoke)` after copying hooks and merging settings:
+
+1. Each required hook file is present.
+2. Each Python hook compiles under the detected interpreter
+   (`python -m py_compile`).
+3. Each shell hook passes `bash -n`, where bash is available. On Windows
+   without bash this is a warning, not a failure.
+4. `block-dangerous-git.py` is given two JSON payloads on stdin and must
+   exit with the expected code: `git push origin main` → exit 0 (allow),
+   `git push --force` → exit 2 (block).
+5. Every hook command path referenced inside `settings.json` /
+   `settings.local.json` resolves to a real file on disk.
+
+If any check fails the installer exits non-zero. It does **not** claim
+success. It prints OS-specific suggestions (Gatekeeper / Defender /
+SELinux) so you can investigate why a file that was copied did not run.
+
+The same five checks live in `doctor.sh` / `doctor.ps1` under
+`[hook runtime verification]`, so you can rerun them at any time without
+reinstalling. Doctor explicitly distinguishes "configured" (a settings.json
+entry exists) from "verified" (the referenced file exists, compiles, and
+the primary safety hook actually blocks what it should). Only the latter
+counts toward `READY`.
+
+**OS security tools caveat.** We can verify that a hook compiles and runs
+in the installer/doctor process. We cannot guarantee that Claude Code will
+later be able to execute the same hook under a different user context,
+sandboxed shell, or restricted antivirus policy. If you see green from
+doctor but the hook does not fire in Claude Code, treat that as a real
+finding and investigate the antivirus / quarantine path first.
+
 ## How to report security issues
 
 If you find a security problem, please open a private security advisory on the repository, or email the maintainer. Please do **not** open a public issue with reproduction details for an unpatched vulnerability.

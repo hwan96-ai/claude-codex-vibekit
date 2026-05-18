@@ -214,6 +214,124 @@ else
   warn "$SETTINGS_PRIMARY missing (commands-only install does not create it)"
 fi
 
+# ---------- [hook runtime verification] ----------
+# "configured" (a line in settings.json) is not the same as "verified" (the
+# referenced file exists, compiles, and the primary safety hook actually
+# blocks what it should). This section attempts the latter and is the
+# authoritative check for whether the safety hooks will fire at runtime.
+echo -e "\n${CYAN}[hook runtime verification]${NC}"
+echo -e "${GRAY}'configured' (settings.json entry) is not 'verified' (file exists${NC}"
+echo -e "${GRAY}and runtime smoke passed). This section runs the latter.${NC}"
+
+hook_runtime_fail=0
+
+block_hook="$CLAUDE_HOME/hooks/block-dangerous-git.py"
+session_hook="$CLAUDE_HOME/hooks/session-start.sh"
+autosave_hook="$CLAUDE_HOME/hooks/auto-save.sh"
+autosave_payload="$CLAUDE_HOME/hooks/auto-save-payload.py"
+
+# Python hook: existence + compile + smoke.
+if [ -f "$block_hook" ]; then
+  ok "block-dangerous-git.py present"
+  if [ -n "$PYTHON_BIN" ]; then
+    if "$PYTHON_BIN" -m py_compile "$block_hook" >/dev/null 2>&1; then
+      ok "block-dangerous-git.py compiles"
+    else
+      miss "block-dangerous-git.py does NOT compile under $PYTHON_BIN"
+      hook_runtime_fail=$((hook_runtime_fail+1))
+      add_step "investigate $block_hook (py_compile failed); reinstall: ./install.sh --mode safe"
+    fi
+
+    smoke_one() {
+      payload="$1"; expected="$2"; label="$3"
+      actual=0
+      printf '%s' "$payload" \
+        | VIBEKIT_HOOK_TEST_BRANCH="feature/doctor-smoke" \
+          "$PYTHON_BIN" "$block_hook" >/dev/null 2>&1 || actual=$?
+      if [ "$actual" = "$expected" ]; then
+        ok "smoke: $label (exit $actual)"
+      else
+        miss "smoke: $label expected exit $expected, got $actual"
+        hook_runtime_fail=$((hook_runtime_fail+1))
+      fi
+    }
+    smoke_one '{"tool_input":{"command":"git push origin main"}}' 0 "harmless push allowed"
+    smoke_one '{"tool_input":{"command":"git push --force"}}'     2 "dangerous push blocked"
+  else
+    warn "skipped block-dangerous-git.py compile/smoke (python missing)"
+  fi
+else
+  warn "block-dangerous-git.py not installed (safe/full mode installs it)"
+fi
+
+# Shell hook: existence + bash -n if bash is available.
+if [ -f "$session_hook" ]; then
+  ok "session-start.sh present"
+  if command -v bash >/dev/null 2>&1; then
+    if bash -n "$session_hook" 2>/dev/null; then
+      ok "session-start.sh syntax ok"
+    else
+      miss "session-start.sh bash -n failed"
+      hook_runtime_fail=$((hook_runtime_fail+1))
+    fi
+  else
+    warn "bash not available; cannot syntax-check session-start.sh (warning only)"
+  fi
+fi
+
+# Settings hook command paths must point to real files. Reuses settings file
+# detection from earlier.
+if [ -f "$SETTINGS_PRIMARY" ] && [ -n "$PYTHON_BIN" ]; then
+  PATH_OUT=$("$PYTHON_BIN" - "$SETTINGS_PRIMARY" <<'PYEOF'
+import json, os, re, sys
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as f:
+        data = json.load(f)
+except Exception as e:
+    print(f"PARSE_ERROR:{e}")
+    sys.exit(0)
+hooks = (data.get("hooks") or {})
+issues = []
+checked = 0
+for event, entries in hooks.items():
+    for entry in (entries or []):
+        for h in (entry.get("hooks") or []):
+            cmd = h.get("command", "")
+            m = re.match(r"^\s*(?:python|python3|bash|sh)\s+(\S+)", cmd)
+            if not m: continue
+            path = m.group(1)
+            checked += 1
+            if not os.path.isfile(path):
+                issues.append(f"{event}: {cmd} -> path missing: {path}")
+print(f"CHECKED:{checked}")
+for i in issues:
+    print(f"ISSUE:{i}")
+PYEOF
+)
+  while IFS= read -r line; do
+    case "$line" in
+      CHECKED:*)
+        n="${line#CHECKED:}"
+        if [ "$n" -gt 0 ]; then ok "settings hook command paths resolved ($n entry/entries)"; fi
+        ;;
+      ISSUE:*)
+        miss "${line#ISSUE:}"
+        hook_runtime_fail=$((hook_runtime_fail+1))
+        add_step "settings.json references a missing hook file — reinstall: ./install.sh --mode safe"
+        ;;
+      PARSE_ERROR:*)
+        # Already reported above in [hook configuration].
+        :
+        ;;
+    esac
+  done <<< "$PATH_OUT"
+fi
+
+if [ "$hook_runtime_fail" -gt 0 ]; then
+  required_missing=$((required_missing+hook_runtime_fail))
+  add_step "$hook_runtime_fail hook runtime issue(s); rerun ./install.sh --mode safe or check OS security tools"
+fi
+
 # ---------- [optional integrations] ----------
 echo -e "\n${CYAN}[optional integrations]${NC}"
 if command -v codex >/dev/null 2>&1; then

@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] — Unreleased
+
+Release-gate hardening. Addresses three findings from the v0.2.0 release
+audit: no install integrity artifact, installer reported success without
+verifying that copied hooks actually run, and doctor could not distinguish
+"configured" from "verified". No changes to slash command behavior or
+what `block-dangerous-git.py` blocks.
+
+### Added
+- `SHA256SUMS` covering the 15 release-relevant files (install / doctor /
+  uninstall scripts on both platforms, all four hooks, all five slash
+  commands).
+- `scripts/generate-checksums.sh` and `scripts/generate-checksums.ps1` to
+  regenerate or verify `SHA256SUMS`. Bash and PowerShell produce
+  byte-identical output (`<sha256>  <relative/path>`, two spaces, lowercase
+  hash, forward-slash paths).
+- Installer step `[4.5] Verifying installed hooks (post-copy runtime smoke)`
+  in both `install.sh` and `install.ps1`. After copying hooks and merging
+  settings, the installer now verifies: (a) required hook files are
+  present, (b) Python hooks compile via `py_compile`, (c) shell hooks pass
+  `bash -n` when bash is available (warning, not failure, on Windows
+  without bash), (d) `block-dangerous-git.py` actually allows a harmless
+  push and blocks a force push, (e) every hook command path in
+  `settings.json` / `settings.local.json` resolves to a real file. If any
+  check fails, the installer exits non-zero and prints OS-specific
+  diagnostic next steps (Gatekeeper / Defender / SELinux).
+- Doctor section `[hook runtime verification]` in both `doctor.sh` and
+  `doctor.ps1`. Same five checks as the installer, plus an explicit note
+  that "configured" (a settings.json entry) is not the same as "verified"
+  (the referenced file exists, compiles, and primary smoke passes).
+  Runtime failures count toward `ACTION REQUIRED`.
+
+### Documentation
+- New "Verify release files" section in `README.md` and `README.ko.md`
+  explaining `SHA256SUMS` honestly: what it does protect against
+  (download tampering, accidental corruption) and what it does not
+  (compromised repository owner account).
+- `docs/INSTALLATION.md`: how to install from a tag, how to verify
+  `SHA256SUMS`, what the installer verifies after copying hooks, what to
+  do if hook verification fails.
+- `docs/SECURITY.md`: supply-chain limitations of `SHA256SUMS`, how the
+  installer's post-copy hook verification works, why OS security tools
+  cannot be fully controlled by the installer.
+- `docs/GITHUB-PUBLISHING.md`: release checklist now requires
+  regenerating `SHA256SUMS` and running doctor's hook runtime
+  verification before tagging.
+- `ROADMAP.md`: v0.2.1 listed as in-progress; v1.0.0 unchanged.
+
+### Notes on the v0.2.0 audit
+- The "YOUR-USERNAME / [YOUR NAME] placeholder" P0 was reclassified as
+  STALE: those placeholders were removed in v0.2.0 (commit
+  `bbe5322 docs: replace remaining GitHub username placeholders`). A
+  repo-wide grep on the v0.2.1 branch returns zero matches.
+- The "Gatekeeper / Defender silence" finding was reframed as **hook
+  runtime smoke verification**. We cannot fully control OS security tools
+  from a userspace installer; we can verify the files exist, compile, and
+  the primary safety hook actually blocks what it should. The installer
+  and doctor now both do that and report honestly if they cannot.
+
 ## [0.2.0] — 2026-05-18
 
 Onboarding and trust polish release. No changes to install behavior, hook

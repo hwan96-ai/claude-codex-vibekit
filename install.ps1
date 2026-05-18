@@ -230,6 +230,159 @@ try {
     Remove-Item $tmpPy.FullName -Force -ErrorAction SilentlyContinue
 }
 
+# ---------- 4.5 Verify installed hooks ----------
+# Post-copy verification. "Copied" is not "verified": Defender, Gatekeeper,
+# or other security tooling can silently quarantine hooks even after a
+# successful Copy-Item. We can't fully control those, but we can verify
+# files exist, the primary Python hook compiles and runs as expected, and
+# that settings.json references point to real files. Refuse to claim
+# success if anything fails.
+Write-Host "`n[4.5] Verifying installed hooks (post-copy runtime smoke)..."
+
+$verifyFail = 0
+$verifyWarn = 0
+
+function Require-File($path) {
+    if (Test-Path -LiteralPath $path) {
+        Write-OK "  file present: $path"
+    } else {
+        Write-Err "  missing: $path"
+        $script:verifyFail++
+    }
+}
+
+# 1) Required hook files exist.
+Require-File (Join-Path $ClaudeHome "hooks\block-dangerous-git.py")
+Require-File (Join-Path $ClaudeHome "hooks\session-start.sh")
+if ($enableAutosave -eq '1') {
+    Require-File (Join-Path $ClaudeHome "hooks\auto-save.sh")
+    Require-File (Join-Path $ClaudeHome "hooks\auto-save-payload.py")
+}
+
+# 2) Python hooks must compile.
+if ($PythonBin) {
+    foreach ($rel in @("hooks\block-dangerous-git.py","hooks\auto-save-payload.py")) {
+        $p = Join-Path $ClaudeHome $rel
+        if (-not (Test-Path -LiteralPath $p)) { continue }
+        & $PythonBin -m py_compile $p 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-OK "  py_compile: $(Split-Path -Leaf $p)"
+        } else {
+            Write-Err "  py_compile failed: $p"
+            $verifyFail++
+        }
+    }
+} else {
+    Write-Err "  skipped py_compile (python not found)"
+    $verifyFail++
+}
+
+# 3) Shell hook syntax check via bash if available. On Windows without WSL or
+#    Git Bash, this is expected to be absent — warn, do not fail.
+$bashCmd = Get-Command bash -ErrorAction SilentlyContinue
+if ($bashCmd) {
+    foreach ($rel in @("hooks\session-start.sh","hooks\auto-save.sh")) {
+        $p = Join-Path $ClaudeHome $rel
+        if (-not (Test-Path -LiteralPath $p)) { continue }
+        & bash -n $p 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-OK "  bash -n: $(Split-Path -Leaf $p)"
+        } else {
+            Write-Err "  bash -n failed: $p"
+            $verifyFail++
+        }
+    }
+} else {
+    Write-Warn2 "  bash not available; skipped shell syntax checks (warning, not failure)"
+    $verifyWarn++
+}
+
+# 4) Runtime smoke test for block-dangerous-git.py.
+function Hook-Smoke($payload, $expected, $label) {
+    $hookPath = Join-Path $ClaudeHome "hooks\block-dangerous-git.py"
+    if (-not (Test-Path -LiteralPath $hookPath)) { return }
+    # Override branch detection so the harmless case doesn't trip the
+    # commit-on-protected-branch rule.
+    $env:VIBEKIT_HOOK_TEST_BRANCH = "feature/install-smoke"
+    try {
+        $payload | & $PythonBin $hookPath 2>$null | Out-Null
+        $actual = $LASTEXITCODE
+    } finally {
+        Remove-Item Env:\VIBEKIT_HOOK_TEST_BRANCH -ErrorAction SilentlyContinue
+    }
+    if ($actual -eq $expected) {
+        Write-OK "  smoke: $label (exit $actual)"
+    } else {
+        Write-Err "  smoke: $label expected exit $expected, got $actual"
+        $script:verifyFail++
+    }
+}
+if ($PythonBin -and (Test-Path -LiteralPath (Join-Path $ClaudeHome "hooks\block-dangerous-git.py"))) {
+    Hook-Smoke '{"tool_input":{"command":"git push origin main"}}'   0 "harmless push allowed"
+    Hook-Smoke '{"tool_input":{"command":"git push --force"}}'       2 "dangerous push blocked"
+}
+
+# 5) settings.json hook command paths must point to real files.
+if ((Test-Path -LiteralPath $Settings) -and $PythonBin) {
+    $pyPathCheck = @'
+import json, os, re, sys
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as f:
+        data = json.load(f)
+except Exception as e:
+    print(f"PARSE_ERROR:{e}")
+    sys.exit(0)
+hooks = (data.get("hooks") or {})
+issues = []
+checked = 0
+for event, entries in hooks.items():
+    for entry in (entries or []):
+        for h in (entry.get("hooks") or []):
+            cmd = h.get("command", "")
+            m = re.match(r"^\s*(?:python|python3|bash|sh)\s+(\S+)", cmd)
+            if not m:
+                continue
+            path = m.group(1)
+            checked += 1
+            if not os.path.isfile(path):
+                issues.append(f"{event}:{cmd} -> path missing: {path}")
+print(f"CHECKED:{checked}")
+for i in issues:
+    print(f"ISSUE:{i}")
+'@
+    $tmpPy2 = New-TemporaryFile
+    Set-Content -Path $tmpPy2.FullName -Value $pyPathCheck -Encoding UTF8
+    try {
+        $lines = & $PythonBin $tmpPy2.FullName $Settings
+        foreach ($line in $lines) {
+            if ($line -like 'CHECKED:*') {
+                Write-OK "  settings hook paths checked ($line)"
+            } elseif ($line -like 'ISSUE:*') {
+                Write-Err "  $($line.Substring(6))"
+                $verifyFail++
+            } elseif ($line -like 'PARSE_ERROR:*') {
+                Write-Err "  settings parse error: $($line.Substring(12))"
+                $verifyFail++
+            }
+        }
+    } finally {
+        Remove-Item $tmpPy2.FullName -Force -ErrorAction SilentlyContinue
+    }
+}
+
+if ($verifyFail -gt 0) {
+    Write-Err "`nerror: hook verification failed ($verifyFail issue(s))."
+    Write-Warn2 "The files were copied, but at least one hook did not pass runtime verification."
+    Write-Warn2 "Do not assume hooks are active. Suggested next steps:"
+    Write-Host  "  - rerun: .\doctor.ps1 -Scope $Scope"
+    Write-Host  "  - check Windows Defender / antivirus quarantine of $ClaudeHome\hooks"
+    Write-Host  "  - check that Python is on PATH and can execute the hook"
+    exit 1
+}
+if ($verifyWarn -gt 0) {
+    Write-Warn2 "  verification completed with $verifyWarn warning(s) (non-fatal)"
+}
+
 # ---------- 5. Dependency report ----------
 Write-Host "`n[5] Checking optional integrations (informational only)..."
 

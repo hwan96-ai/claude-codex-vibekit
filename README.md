@@ -249,6 +249,38 @@ Phase 7+: Capture session learnings (for next time)
 /hwan-refactor-code --resume     # Continue from last incomplete run
 ```
 
+## Verify release files
+
+Each tagged release ships a `SHA256SUMS` file covering the 15 release-relevant
+files (install / doctor / uninstall scripts on both platforms, all four hooks,
+all five slash commands). To verify after cloning a tag:
+
+```bash
+git checkout v0.2.1
+bash scripts/generate-checksums.sh --check
+```
+```powershell
+git checkout v0.2.1
+.\scripts\generate-checksums.ps1 -Check
+```
+
+Both scripts produce byte-identical output (`<sha256>  <relative/path>`,
+lowercase hash, two spaces, forward-slash paths), so a clone verified on Linux
+matches one verified on Windows.
+
+**What `SHA256SUMS` protects against:** accidental file corruption during
+download, mirror tampering, partial clones.
+**What it does NOT protect against:** a compromised repository owner account
+publishing a malicious tag alongside a malicious `SHA256SUMS`. Prefer
+**tagged releases** over installing from a moving `main`. See
+[`docs/SECURITY.md`](docs/SECURITY.md) for the full supply-chain note.
+
+The `safe` and `full` installers also verify after copying hooks: every hook
+file exists, Python hooks compile, and `block-dangerous-git.py` actually
+blocks a force push and allows a normal push. If any check fails, the
+installer exits non-zero and prints OS-specific diagnostic steps — it will
+not claim success.
+
 ## Safety model
 
 What Vibekit will and will not do.

@@ -1,0 +1,24 @@
+# Force LF line endings for all text files so SHA256SUMS verification is
+# reproducible across operating systems. Without this, a Windows clone with
+# core.autocrlf=true would have CRLF in install.sh, doctor.sh, hooks, etc.
+# and SHA256 hashes would not match what was generated on Linux/macOS.
+#
+# This affects checked-out working tree contents on first checkout. For
+# already-cloned repos, run `git add --renormalize .` after pulling.
+
+* text=auto eol=lf
+
+# Explicit pins for files covered by SHA256SUMS, so hash stability is
+# guaranteed regardless of any global git config.
+*.sh    text eol=lf
+*.ps1   text eol=lf
+*.py    text eol=lf
+*.md    text eol=lf
+SHA256SUMS text eol=lf
+
+# Binary assets (images under docs/assets/) keep their bytes intact.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.svg   text eol=lf
