@@ -102,7 +102,7 @@ Vibekit은 로컬 Claude Code 커맨드를 설치하고, 선택적 통합들을 
 
 **macOS / Linux / WSL:**
 ```bash
-git clone https://github.com/YOUR-USERNAME/claude-codex-vibekit.git
+git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
 cd claude-codex-vibekit
 ./install.sh --mode safe
 ./doctor.sh
@@ -110,7 +110,7 @@ cd claude-codex-vibekit
 
 **Windows PowerShell:**
 ```powershell
-git clone https://github.com/YOUR-USERNAME/claude-codex-vibekit.git
+git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
 cd claude-codex-vibekit
 .\install.ps1 -Mode safe
 .\doctor.ps1
