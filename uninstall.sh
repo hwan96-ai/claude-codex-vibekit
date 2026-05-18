@@ -66,6 +66,7 @@ for f in \
   "$CLAUDE_HOME/commands/git-safe.md" \
   "$CLAUDE_HOME/hooks/block-dangerous-git.py" \
   "$CLAUDE_HOME/hooks/auto-save.sh" \
+  "$CLAUDE_HOME/hooks/auto-save-payload.py" \
   "$CLAUDE_HOME/hooks/session-start.sh"; do
   if [ -f "$f" ]; then rm -f "$f"; echo "removed $f"; removed=$((removed+1)); fi
 done
@@ -107,7 +108,7 @@ elif "hooks" in data:
 
 with open(p, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2); f.write("\n")
-print("cleaned vibekit hook entries from settings.json")
+print(f"cleaned vibekit hook entries from {p}")
 PYEOF
   fi
 fi

@@ -28,16 +28,27 @@ echo "smoke: mode=$MODE scope=$SCOPE"
 
 mkdir -p "$CLAUDE_HOME"
 
-INSTALL_ARGS="--mode $MODE"
+# Use an explicit Claude home path for both install and doctor so the test is
+# independent of the current working directory and never accidentally touches
+# the kit's own .claude/.
+INSTALL_ARGS="--mode $MODE --claude-home $CLAUDE_HOME"
+DOCTOR_ARGS="--claude-home=$CLAUDE_HOME"
 if [ "$SCOPE" = "project" ]; then
   INSTALL_ARGS="$INSTALL_ARGS --scope project --yes"
+  DOCTOR_ARGS="$DOCTOR_ARGS --scope=project"
 fi
 
+# Run install from a neutral workdir (not the repo root) so the in-repo
+# warning path never triggers.
+WORKDIR="$(mktemp -d)"
+trap 'rm -rf "$WORKDIR"' EXIT
+
 # shellcheck disable=SC2086
-( cd "$REPO_ROOT" && bash ./install.sh $INSTALL_ARGS )
+( cd "$WORKDIR" && bash "$REPO_ROOT/install.sh" $INSTALL_ARGS )
 
 set +e
-( cd "$REPO_ROOT" && bash ./doctor.sh )
+# shellcheck disable=SC2086
+( cd "$WORKDIR" && bash "$REPO_ROOT/doctor.sh" $DOCTOR_ARGS )
 DOCTOR_RC=$?
 set -e
 echo "smoke: doctor rc=$DOCTOR_RC"
@@ -46,12 +57,7 @@ if [ "$DOCTOR_RC" -ge 2 ]; then
   exit 1
 fi
 
-# Resolve where commands actually landed.
-if [ "$SCOPE" = "project" ]; then
-  CMD_DIR="$REPO_ROOT/.claude/commands"
-else
-  CMD_DIR="$CLAUDE_HOME/commands"
-fi
+CMD_DIR="$CLAUDE_HOME/commands"
 
 missing=0
 for f in hwan-refactor-idea.md hwan-refactor-code.md hwan-refactor-design.md hwan-refactor-git.md git-safe.md; do

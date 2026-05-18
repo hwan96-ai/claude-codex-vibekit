@@ -50,6 +50,7 @@ $targets = @(
     "commands\git-safe.md",
     "hooks\block-dangerous-git.py",
     "hooks\auto-save.sh",
+    "hooks\auto-save-payload.py",
     "hooks\session-start.sh"
 )
 $removed = 0
@@ -97,7 +98,7 @@ if not hooks and "hooks" in data: del data["hooks"]
 elif "hooks" in data: data["hooks"] = hooks
 with open(p, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2); f.write("\n")
-print("cleaned vibekit hook entries from settings.json")
+print(f"cleaned vibekit hook entries from {p}")
 '@
         $tmp = New-TemporaryFile
         Set-Content -Path $tmp.FullName -Value $py -Encoding UTF8

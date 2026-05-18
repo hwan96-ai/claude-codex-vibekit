@@ -24,34 +24,43 @@ Write-Host "smoke: mode=$mode scope=$scope"
 
 New-Item -ItemType Directory -Path $env:CLAUDE_HOME -Force | Out-Null
 
-Push-Location $repoRoot
-try {
-    if ($scope -eq 'project') {
-        & .\install.ps1 -Mode $mode -Scope project -Yes
-    } else {
-        & .\install.ps1 -Mode $mode
-    }
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "smoke: install.ps1 exited $LASTEXITCODE"
-        exit 1
-    }
+# Use an explicit Claude home path and run from a neutral workdir (never the
+# repo root) so the in-repo warning path never triggers.
+$workdir = Join-Path ([System.IO.Path]::GetTempPath()) ("vibekit-smoke-" + [System.Guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $workdir -Force | Out-Null
 
-    & .\doctor.ps1
-    $doctorRc = $LASTEXITCODE
-    Write-Host "smoke: doctor rc=$doctorRc"
-    if ($doctorRc -ge 2) {
-        Write-Error "smoke: FAIL doctor reported ACTION REQUIRED"
-        exit 1
+try {
+    Push-Location $workdir
+    try {
+        if ($scope -eq 'project') {
+            & (Join-Path $repoRoot 'install.ps1') -Mode $mode -Scope project -ClaudeHome $env:CLAUDE_HOME -Yes
+        } else {
+            & (Join-Path $repoRoot 'install.ps1') -Mode $mode -ClaudeHome $env:CLAUDE_HOME
+        }
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "smoke: install.ps1 exited $LASTEXITCODE"
+            exit 1
+        }
+
+        if ($scope -eq 'project') {
+            & (Join-Path $repoRoot 'doctor.ps1') -Scope project -ClaudeHome $env:CLAUDE_HOME
+        } else {
+            & (Join-Path $repoRoot 'doctor.ps1') -ClaudeHome $env:CLAUDE_HOME
+        }
+        $doctorRc = $LASTEXITCODE
+        Write-Host "smoke: doctor rc=$doctorRc"
+        if ($doctorRc -ge 2) {
+            Write-Error "smoke: FAIL doctor reported ACTION REQUIRED"
+            exit 1
+        }
+    } finally {
+        Pop-Location
     }
 } finally {
-    Pop-Location
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $workdir
 }
 
-if ($scope -eq 'project') {
-    $cmdDir = Join-Path $repoRoot ".claude\commands"
-} else {
-    $cmdDir = Join-Path $env:CLAUDE_HOME "commands"
-}
+$cmdDir = Join-Path $env:CLAUDE_HOME "commands"
 
 $expected = @(
     'hwan-refactor-idea.md',
