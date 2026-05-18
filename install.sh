@@ -138,8 +138,11 @@ else
 fi
 
 echo -e "\n${CYAN}=== Claude-Codex Vibekit Installer (mode: $MODE, scope: $SCOPE) ===${NC}"
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+
 echo -e "  ${GRAY}home:        $HOME${NC}"
 echo -e "  ${GRAY}claude_home: $CLAUDE_HOME${NC}"
+echo -e "  ${GRAY}codex_home:  $CODEX_HOME${NC}"
 echo -e "  ${GRAY}repo_root:   $REPO_ROOT${NC}"
 echo -e "  ${GRAY}cwd:         $CWD${NC}"
 
@@ -197,6 +200,27 @@ for src in "$REPO_ROOT/.claude/commands/"*.md; do
   cp -f "$src" "$dst"
   echo -e "  ${GREEN}copied${NC} $dst"
 done
+
+# ---------- 2b. Codex custom prompts ----------
+# Codex (CLI and Windows app) reads custom prompts from $CODEX_HOME/prompts.
+# This is always user-level; --scope project does not apply to Codex.
+echo -e "\n[2b] Installing Codex custom prompts into $CODEX_HOME/prompts ..."
+mkdir -p "$CODEX_HOME/prompts"
+if [ -d "$REPO_ROOT/codex-prompts" ]; then
+  for src in "$REPO_ROOT/codex-prompts/"*.md; do
+    [ -f "$src" ] || continue
+    base="$(basename "$src")"
+    dst="$CODEX_HOME/prompts/$base"
+    if same_path "$src" "$dst"; then
+      echo -e "  ${GRAY}skip  ${NC} $dst (same file)"
+      continue
+    fi
+    cp -f "$src" "$dst"
+    echo -e "  ${GREEN}copied${NC} $dst"
+  done
+else
+  echo -e "  ${GRAY}skipped (no codex-prompts/ in repo)${NC}"
+fi
 
 if [ "$MODE" = "commands-only" ]; then
   echo -e "\n[3] Mode is commands-only: skipping hooks and settings.json."

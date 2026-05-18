@@ -28,11 +28,19 @@ if ($Scope -eq 'project') {
     $Settings = Join-Path $ClaudeHome "settings.json"
 }
 
+if ($env:CODEX_HOME) {
+    $CodexHome = $env:CODEX_HOME
+} else {
+    $CodexHome = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".codex"
+}
+
 Write-Host "Vibekit uninstall plan:"
 Write-Host "  scope:       $Scope"
 Write-Host "  claude_home: $ClaudeHome"
+Write-Host "  codex_home:  $CodexHome"
 Write-Host "  settings:    $Settings"
 Write-Host "  - remove commands\hwan-refactor-*.md and commands\git-safe.md"
+Write-Host "  - remove $CodexHome\prompts\hwan-refactor-*.md"
 Write-Host "  - remove hooks\block-dangerous-git.py, hooks\auto-save.sh, hooks\session-start.sh"
 Write-Host "  - remove vibekit-added entries from settings.json (backed up first)"
 Write-Host "  - learnings\ are preserved (delete manually if desired)"
@@ -53,9 +61,23 @@ $targets = @(
     "hooks\auto-save-payload.py",
     "hooks\session-start.sh"
 )
+$codexTargets = @(
+    "prompts\hwan-refactor-idea.md",
+    "prompts\hwan-refactor-code.md",
+    "prompts\hwan-refactor-design.md",
+    "prompts\hwan-refactor-git.md"
+)
 $removed = 0
 foreach ($rel in $targets) {
     $p = Join-Path $ClaudeHome $rel
+    if (Test-Path $p) {
+        Remove-Item $p -Force
+        Write-Host "removed $p"
+        $removed++
+    }
+}
+foreach ($rel in $codexTargets) {
+    $p = Join-Path $CodexHome $rel
     if (Test-Path $p) {
         Remove-Item $p -Force
         Write-Host "removed $p"

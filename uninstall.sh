@@ -36,6 +36,8 @@ else
   CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 fi
 
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+
 if [ "$SCOPE" = "project" ]; then
   SETTINGS="$CLAUDE_HOME/settings.local.json"
 else
@@ -45,8 +47,10 @@ fi
 echo "Vibekit uninstall plan:"
 echo "  scope:       $SCOPE"
 echo "  claude_home: $CLAUDE_HOME"
+echo "  codex_home:  $CODEX_HOME"
 echo "  settings:    $SETTINGS"
 echo "  - remove commands/hwan-refactor-*.md and commands/git-safe.md"
+echo "  - remove $CODEX_HOME/prompts/hwan-refactor-*.md"
 echo "  - remove hooks/{block-dangerous-git.py,auto-save.sh,session-start.sh}"
 echo "  - remove vibekit-added entries from $SETTINGS (backed up first)"
 echo "  - learnings/ are preserved (delete manually if desired)"
@@ -64,6 +68,10 @@ for f in \
   "$CLAUDE_HOME/commands/hwan-refactor-design.md" \
   "$CLAUDE_HOME/commands/hwan-refactor-git.md" \
   "$CLAUDE_HOME/commands/git-safe.md" \
+  "$CODEX_HOME/prompts/hwan-refactor-idea.md" \
+  "$CODEX_HOME/prompts/hwan-refactor-code.md" \
+  "$CODEX_HOME/prompts/hwan-refactor-design.md" \
+  "$CODEX_HOME/prompts/hwan-refactor-git.md" \
   "$CLAUDE_HOME/hooks/block-dangerous-git.py" \
   "$CLAUDE_HOME/hooks/auto-save.sh" \
   "$CLAUDE_HOME/hooks/auto-save-payload.py" \

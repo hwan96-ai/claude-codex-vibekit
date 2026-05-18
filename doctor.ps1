@@ -38,6 +38,12 @@ if ($Scope -eq 'project') {
     $SettingsPrimary = Join-Path $ClaudeHome "settings.json"
 }
 
+if ($env:CODEX_HOME) {
+    $CodexHome = $env:CODEX_HOME
+} else {
+    $CodexHome = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".codex"
+}
+
 $requiredMissing  = 0
 $optionalMissing  = 0
 $vibekitMissing   = 0
@@ -49,6 +55,7 @@ function AddStep($s) { [void]$NextSteps.Add($s) }
 Write-Host "=== Vibekit doctor ===" -ForegroundColor Cyan
 Write-Host "scope:       $Scope"
 Write-Host "claude_home: $ClaudeHome"
+Write-Host "codex_home:  $CodexHome"
 Write-Host "settings:    $SettingsPrimary"
 
 Section "[core readiness]"
@@ -114,6 +121,18 @@ foreach ($rel in $cmdFiles) {
     $p = Join-Path $ClaudeHome $rel
     if (Test-Path $p) { OK $p } else { MISS "$p missing"; $vibekitMissing++ }
 }
+
+$codexPromptFiles = @(
+    "prompts\hwan-refactor-idea.md",
+    "prompts\hwan-refactor-code.md",
+    "prompts\hwan-refactor-design.md",
+    "prompts\hwan-refactor-git.md"
+)
+foreach ($rel in $codexPromptFiles) {
+    $p = Join-Path $CodexHome $rel
+    if (Test-Path $p) { OK $p } else { MISS "$p missing (Codex prompt)"; $vibekitMissing++ }
+}
+
 if ($vibekitMissing -gt 0) {
     AddStep "re-run installer: .\install.ps1 -Mode commands-only -Scope $Scope"
 }

@@ -65,6 +65,8 @@ else
   CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 fi
 
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+
 # Settings file convention: project scope prefers settings.local.json; global
 # uses settings.json. Doctor still inspects both for hook wiring.
 if [ "$SCOPE" = "project" ]; then
@@ -88,6 +90,7 @@ add_step() { NEXT_STEPS+=("$1"); }
 echo -e "${CYAN}=== Vibekit doctor ===${NC}"
 echo "scope:       $SCOPE"
 echo "claude_home: $CLAUDE_HOME"
+echo "codex_home:  $CODEX_HOME"
 echo "settings:    $SETTINGS_PRIMARY"
 
 # ---------- [core readiness] ----------
@@ -146,6 +149,15 @@ for f in \
   "$CLAUDE_HOME/commands/hwan-refactor-git.md" \
   "$CLAUDE_HOME/commands/git-safe.md"; do
   if [ -f "$f" ]; then ok "$f"; else miss "$f missing"; vibekit_missing=$((vibekit_missing+1)); fi
+done
+
+# Codex custom prompts (~/.codex/prompts)
+for f in \
+  "$CODEX_HOME/prompts/hwan-refactor-idea.md" \
+  "$CODEX_HOME/prompts/hwan-refactor-code.md" \
+  "$CODEX_HOME/prompts/hwan-refactor-design.md" \
+  "$CODEX_HOME/prompts/hwan-refactor-git.md"; do
+  if [ -f "$f" ]; then ok "$f"; else miss "$f missing (Codex prompt)"; vibekit_missing=$((vibekit_missing+1)); fi
 done
 if [ "$vibekit_missing" -gt 0 ]; then
   add_step "re-run installer: ./install.sh --mode commands-only [--scope $SCOPE]"
