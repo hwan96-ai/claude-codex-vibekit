@@ -72,6 +72,31 @@ Documentation-only release. No install behavior changes.
 - New `docs/GITHUB-PUBLISHING.md` with release/topic/badge checklist.
 - README.ko aligned with the polish.
 
+## v0.2.1 — In progress (release-gate hardening)
+
+Addresses three findings from the v0.2.0 release audit.
+
+- **`SHA256SUMS`** at the repo root covering the 15 release-relevant files,
+  plus cross-platform `scripts/generate-checksums.{sh,ps1}` that produce
+  byte-identical output. Documented honestly: it protects against download
+  tampering, not against a compromised owner account.
+- **Installer post-copy hook verification** (`[4.5]` section in both
+  `install.sh` and `install.ps1`). After copying hooks and merging
+  settings, the installer verifies file existence, `py_compile`, `bash -n`,
+  runtime smoke against `block-dangerous-git.py`, and resolves every hook
+  command path in settings. Refuses success on failure with OS-specific
+  diagnostics.
+- **Doctor `[hook runtime verification]`** section in both `doctor.sh` and
+  `doctor.ps1`. Same checks, explicit "configured ≠ verified" wording.
+  Failures count toward `ACTION REQUIRED`.
+- Reframed the "Gatekeeper / Defender silence" audit finding as runtime
+  hook verification (what we can actually check from userspace), with a
+  documented caveat that the installer cannot fully control OS security
+  tools.
+- The "YOUR-USERNAME / [YOUR NAME] placeholder" audit P0 was reclassified
+  as STALE (already fixed in v0.2.0); confirmed by repo-wide grep on the
+  v0.2.1 branch.
+
 ## v0.1.x — Hardening (still open)
 
 Targeted follow-ups, no specific version commitment:

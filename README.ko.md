@@ -248,6 +248,36 @@ Phase 7+: 이번 세션 학습 캡처
 /hwan-refactor-code --resume     # 중단된 곳부터 이어서
 ```
 
+## 릴리스 파일 검증
+
+각 태그 릴리스에는 15개의 핵심 파일(양쪽 OS의 install / doctor / uninstall
+스크립트, 4개 훅, 5개 슬래시 커맨드)에 대한 `SHA256SUMS`가 포함됩니다.
+태그를 받은 뒤 검증하려면:
+
+```bash
+git checkout v0.2.1
+bash scripts/generate-checksums.sh --check
+```
+```powershell
+git checkout v0.2.1
+.\scripts\generate-checksums.ps1 -Check
+```
+
+두 스크립트는 바이트 단위로 동일한 출력(`<sha256>  <상대경로>`, 소문자 해시,
+스페이스 2칸, 슬래시 경로)을 만들어내므로, Linux에서 검증한 클론과 Windows에서
+검증한 클론이 정확히 일치합니다.
+
+**`SHA256SUMS`가 보호하는 것:** 다운로드 중 파일 손상, 미러 변조, 부분 클론.
+**보호하지 못하는 것:** 저장소 소유자 계정이 침해되어 악성 태그와 악성
+`SHA256SUMS`가 함께 게시되는 경우. 움직이는 `main`보다는 **태그 릴리스**를
+우선해서 받으세요. 전체 공급망 주의사항은
+[`docs/SECURITY.md`](docs/SECURITY.md)를 참고하세요.
+
+`safe`/`full` 인스톨러는 훅 복사 후에도 한 번 더 검증합니다 — 모든 훅 파일
+존재 여부, Python 훅 컴파일, `block-dangerous-git.py`가 실제로 force push를
+차단하고 정상 push는 통과시키는지. 한 가지라도 실패하면 인스톨러는 0이 아닌
+종료 코드와 OS별 진단 절차를 출력하며 성공을 주장하지 않습니다.
+
 ## 안전 모델
 
 Vibekit이 하는 것과 안 하는 것.

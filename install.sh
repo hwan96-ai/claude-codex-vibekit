@@ -318,6 +318,154 @@ else:
     print("  no changes needed (hooks already present)")
 PYEOF
 
+# ---------- 4.5 Verify installed hooks ----------
+# Post-copy verification. "Copied" is not the same as "verified": OS security
+# tools (Gatekeeper quarantine on macOS, Defender on Windows, SELinux) can
+# silently quarantine or block hooks even after a successful cp. We can't
+# fully control those, but we can check that the files exist, the primary
+# Python hook compiles and runs the expected behavior, and that settings.json
+# references point to real files. If any of those fail, refuse to claim a
+# successful install.
+echo -e "\n[4.5] Verifying installed hooks (post-copy runtime smoke)..."
+
+verify_fail=0
+verify_warn=0
+
+require_file() {
+  if [ -f "$1" ]; then
+    echo -e "  ${GREEN}ok ${NC} file present: $1"
+  else
+    echo -e "  ${RED}!! ${NC} missing: $1"
+    verify_fail=$((verify_fail+1))
+  fi
+}
+
+# 1) Required hook files exist.
+require_file "$CLAUDE_HOME/hooks/block-dangerous-git.py"
+require_file "$CLAUDE_HOME/hooks/session-start.sh"
+if [ "$ENABLE_AUTOSAVE" = "1" ]; then
+  require_file "$CLAUDE_HOME/hooks/auto-save.sh"
+  require_file "$CLAUDE_HOME/hooks/auto-save-payload.py"
+fi
+
+# 2) Python hooks must compile.
+if [ -n "$PYTHON_BIN" ]; then
+  for py in "$CLAUDE_HOME/hooks/block-dangerous-git.py" \
+            "$CLAUDE_HOME/hooks/auto-save-payload.py"; do
+    [ -f "$py" ] || continue
+    if "$PYTHON_BIN" -m py_compile "$py" >/dev/null 2>&1; then
+      echo -e "  ${GREEN}ok ${NC} py_compile: $(basename "$py")"
+    else
+      echo -e "  ${RED}!! ${NC} py_compile failed: $py"
+      verify_fail=$((verify_fail+1))
+    fi
+  done
+else
+  echo -e "  ${YELLOW}-- ${NC} skipped py_compile (python not found)"
+  verify_fail=$((verify_fail+1))
+fi
+
+# 3) Shell hook syntax check where bash is available.
+if command -v bash >/dev/null 2>&1; then
+  for sh in "$CLAUDE_HOME/hooks/session-start.sh" \
+            "$CLAUDE_HOME/hooks/auto-save.sh"; do
+    [ -f "$sh" ] || continue
+    if bash -n "$sh" 2>/dev/null; then
+      echo -e "  ${GREEN}ok ${NC} bash -n: $(basename "$sh")"
+    else
+      echo -e "  ${RED}!! ${NC} bash -n failed: $sh"
+      verify_fail=$((verify_fail+1))
+    fi
+  done
+else
+  echo -e "  ${YELLOW}-- ${NC} bash not available; skipped shell syntax checks (warning, not failure)"
+  verify_warn=$((verify_warn+1))
+fi
+
+# 4) Runtime smoke test for block-dangerous-git.py.
+hook_smoke() {
+  # $1 = JSON payload, $2 = expected exit code (0 allow, 2 block), $3 = label
+  local payload="$1" expected="$2" label="$3"
+  local actual=0
+  printf '%s' "$payload" | "$PYTHON_BIN" "$CLAUDE_HOME/hooks/block-dangerous-git.py" >/dev/null 2>&1 || actual=$?
+  if [ "$actual" = "$expected" ]; then
+    echo -e "  ${GREEN}ok ${NC} smoke: $label (exit $actual)"
+  else
+    echo -e "  ${RED}!! ${NC} smoke: $label expected exit $expected, got $actual"
+    verify_fail=$((verify_fail+1))
+  fi
+}
+if [ -n "$PYTHON_BIN" ] && [ -f "$CLAUDE_HOME/hooks/block-dangerous-git.py" ]; then
+  # The hook reads current branch from git rev-parse; override to a feature
+  # branch so commit-on-protected logic doesn't fire on the harmless case.
+  VIBEKIT_HOOK_TEST_BRANCH="feature/install-smoke" \
+    hook_smoke '{"tool_input":{"command":"git push origin main"}}'   0 "harmless push allowed"
+  VIBEKIT_HOOK_TEST_BRANCH="feature/install-smoke" \
+    hook_smoke '{"tool_input":{"command":"git push --force"}}'       2 "dangerous push blocked"
+fi
+
+# 5) settings.json hook command paths must point to real files on disk.
+if [ -f "$SETTINGS" ] && [ -n "$PYTHON_BIN" ]; then
+  PATH_CHECK=$("$PYTHON_BIN" - "$SETTINGS" <<'PYEOF'
+import json, os, re, sys
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as f:
+        data = json.load(f)
+except Exception as e:
+    print(f"PARSE_ERROR:{e}")
+    sys.exit(0)
+hooks = (data.get("hooks") or {})
+issues = []
+checked = 0
+# Heuristic: each hook command starts with `python <path>` or `bash <path>`.
+# Extract the second token (the path) and check it exists.
+for event, entries in hooks.items():
+    for entry in (entries or []):
+        for h in (entry.get("hooks") or []):
+            cmd = h.get("command", "")
+            m = re.match(r"^\s*(?:python|python3|bash|sh)\s+(\S+)", cmd)
+            if not m:
+                continue
+            path = m.group(1)
+            checked += 1
+            if not os.path.isfile(path):
+                issues.append(f"{event}:{cmd} -> path missing: {path}")
+print(f"CHECKED:{checked}")
+for i in issues:
+    print(f"ISSUE:{i}")
+PYEOF
+)
+  while IFS= read -r line; do
+    case "$line" in
+      CHECKED:*)
+        echo -e "  ${GREEN}ok ${NC} settings hook paths checked (${line#CHECKED:})"
+        ;;
+      ISSUE:*)
+        echo -e "  ${RED}!! ${NC} ${line#ISSUE:}"
+        verify_fail=$((verify_fail+1))
+        ;;
+      PARSE_ERROR:*)
+        echo -e "  ${RED}!! ${NC} settings parse error: ${line#PARSE_ERROR:}"
+        verify_fail=$((verify_fail+1))
+        ;;
+    esac
+  done <<< "$PATH_CHECK"
+fi
+
+if [ "$verify_fail" -gt 0 ]; then
+  echo -e "\n${RED}error:${NC} hook verification failed ($verify_fail issue(s))."
+  echo -e "${YELLOW}The files were copied, but at least one hook did not pass runtime verification.${NC}"
+  echo -e "${YELLOW}Do not assume hooks are active. Suggested next steps:${NC}"
+  echo -e "  - rerun: ./doctor.sh --scope $SCOPE"
+  echo -e "  - macOS: check for Gatekeeper quarantine: xattr -l $CLAUDE_HOME/hooks/*"
+  echo -e "  - Windows: check Defender / antivirus quarantine of $CLAUDE_HOME\\hooks"
+  echo -e "  - Linux: check SELinux/AppArmor logs if applicable"
+  exit 1
+fi
+if [ "$verify_warn" -gt 0 ]; then
+  echo -e "  ${YELLOW}-- ${NC} verification completed with $verify_warn warning(s) (non-fatal)"
+fi
+
 # ---------- 5. Dependency report ----------
 echo -e "\n[5] Checking optional integrations (informational only)..."
 

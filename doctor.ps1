@@ -183,6 +183,115 @@ print("\n".join(out))
     WARN "$SettingsPrimary missing (commands-only install does not create it)"
 }
 
+Section "[hook runtime verification]"
+Write-Host "  'configured' (settings.json entry) is not 'verified' (file exists" -ForegroundColor DarkGray
+Write-Host "  and runtime smoke passed). This section runs the latter." -ForegroundColor DarkGray
+
+$hookRuntimeFail = 0
+$blockHook    = Join-Path $ClaudeHome "hooks\block-dangerous-git.py"
+$sessionHook  = Join-Path $ClaudeHome "hooks\session-start.sh"
+
+if (Test-Path -LiteralPath $blockHook) {
+    OK "block-dangerous-git.py present"
+    if ($Python) {
+        & $Python -m py_compile $blockHook 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            OK "block-dangerous-git.py compiles"
+        } else {
+            MISS "block-dangerous-git.py does NOT compile under $Python"
+            $hookRuntimeFail++
+            AddStep "investigate $blockHook (py_compile failed); reinstall: .\install.ps1 -Mode safe"
+        }
+        function Smoke-One($payload, $expected, $label) {
+            $env:VIBEKIT_HOOK_TEST_BRANCH = "feature/doctor-smoke"
+            try {
+                $payload | & $Python $blockHook 2>$null | Out-Null
+                $actual = $LASTEXITCODE
+            } finally {
+                Remove-Item Env:\VIBEKIT_HOOK_TEST_BRANCH -ErrorAction SilentlyContinue
+            }
+            if ($actual -eq $expected) {
+                OK "smoke: $label (exit $actual)"
+            } else {
+                MISS "smoke: $label expected exit $expected, got $actual"
+                $script:hookRuntimeFail++
+            }
+        }
+        Smoke-One '{"tool_input":{"command":"git push origin main"}}' 0 "harmless push allowed"
+        Smoke-One '{"tool_input":{"command":"git push --force"}}'     2 "dangerous push blocked"
+    } else {
+        WARN "skipped block-dangerous-git.py compile/smoke (python missing)"
+    }
+} else {
+    WARN "block-dangerous-git.py not installed (safe/full mode installs it)"
+}
+
+if (Test-Path -LiteralPath $sessionHook) {
+    OK "session-start.sh present"
+    $bashCmd = Get-Command bash -ErrorAction SilentlyContinue
+    if ($bashCmd) {
+        & bash -n $sessionHook 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            OK "session-start.sh syntax ok"
+        } else {
+            MISS "session-start.sh bash -n failed"
+            $hookRuntimeFail++
+        }
+    } else {
+        WARN "bash not available; cannot syntax-check session-start.sh (warning only)"
+    }
+}
+
+if ((Test-Path -LiteralPath $SettingsPrimary) -and $Python) {
+    $pyPath = @'
+import json, os, re, sys
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as f:
+        data = json.load(f)
+except Exception as e:
+    print(f"PARSE_ERROR:{e}")
+    sys.exit(0)
+hooks = (data.get("hooks") or {})
+issues = []
+checked = 0
+for event, entries in hooks.items():
+    for entry in (entries or []):
+        for h in (entry.get("hooks") or []):
+            cmd = h.get("command", "")
+            m = re.match(r"^\s*(?:python|python3|bash|sh)\s+(\S+)", cmd)
+            if not m: continue
+            path = m.group(1)
+            checked += 1
+            if not os.path.isfile(path):
+                issues.append(f"{event}: {cmd} -> path missing: {path}")
+print(f"CHECKED:{checked}")
+for i in issues:
+    print(f"ISSUE:{i}")
+'@
+    $tmpP = New-TemporaryFile
+    Set-Content -Path $tmpP.FullName -Value $pyPath -Encoding UTF8
+    try {
+        $lines = & $Python $tmpP.FullName $SettingsPrimary
+        foreach ($line in $lines) {
+            if ($line -like 'CHECKED:*') {
+                $n = [int]$line.Substring(8)
+                if ($n -gt 0) { OK "settings hook command paths resolved ($n entry/entries)" }
+            } elseif ($line -like 'ISSUE:*') {
+                MISS $line.Substring(6)
+                $hookRuntimeFail++
+                AddStep "settings.json references a missing hook file - reinstall: .\install.ps1 -Mode safe"
+            }
+        }
+    } finally {
+        Remove-Item $tmpP.FullName -Force -ErrorAction SilentlyContinue
+    }
+}
+
+if ($hookRuntimeFail -gt 0) {
+    $requiredMissing += $hookRuntimeFail
+    AddStep "$hookRuntimeFail hook runtime issue(s); rerun .\install.ps1 -Mode safe or check Windows Defender / antivirus"
+}
+
 Section "[optional integrations]"
 if (Get-Command codex -ErrorAction SilentlyContinue) {
     $cv = (& codex --version 2>$null | Select-Object -First 1)

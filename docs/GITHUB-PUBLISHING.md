@@ -25,23 +25,37 @@ the Explore feed and in topic pages.
    ```bash
    git checkout main && git pull --ff-only
    ```
-3. Update `CHANGELOG.md`: change `## [X.Y.Z] — Unreleased` to
-   `## [X.Y.Z] — YYYY-MM-DD`.
-4. Commit:
+3. Regenerate and verify `SHA256SUMS` against the tree you are about to
+   tag (mismatch here means an earlier commit changed a release file
+   without refreshing checksums):
    ```bash
-   git add CHANGELOG.md
+   bash scripts/generate-checksums.sh
+   git diff --exit-code SHA256SUMS || git add SHA256SUMS
+   ```
+4. Run doctor hook runtime verification against a throwaway CLAUDE_HOME
+   to confirm hooks still install and behave:
+   ```bash
+   tmp="$(mktemp -d)"
+   ./install.sh --mode safe --claude-home "$tmp"
+   ./doctor.sh --claude-home="$tmp" --ci   # expect READY (rc 0)
+   ```
+5. Update `CHANGELOG.md`: change `## [X.Y.Z] — Unreleased` to
+   `## [X.Y.Z] — YYYY-MM-DD`.
+6. Commit:
+   ```bash
+   git add CHANGELOG.md SHA256SUMS
    git commit -m "docs(changelog): release vX.Y.Z"
    ```
-5. Tag (annotated):
+7. Tag (annotated):
    ```bash
    git tag -a vX.Y.Z -m "vX.Y.Z: <short summary>"
    ```
-6. Push main + tag (no force):
+8. Push main + tag (no force):
    ```bash
    git push
    git push origin vX.Y.Z
    ```
-7. Extract release notes (the X.Y.Z section of CHANGELOG.md) and create the
+9. Extract release notes (the X.Y.Z section of CHANGELOG.md) and create the
    release. PowerShell-friendly (no process substitution):
    ```bash
    python -c "import re,pathlib; t=pathlib.Path('CHANGELOG.md').read_text(encoding='utf-8'); \
@@ -52,10 +66,15 @@ the Explore feed and in topic pages.
    rm .release-notes.md
    ```
    Replace `X\.Y\.Z` with the actual version (escape dots for the regex).
-8. Verify:
-   ```bash
-   gh release view vX.Y.Z
-   ```
+10. (Optional) attach `SHA256SUMS` to the release so it can be downloaded
+    independently of a clone:
+    ```bash
+    gh release upload vX.Y.Z SHA256SUMS
+    ```
+11. Verify:
+    ```bash
+    gh release view vX.Y.Z
+    ```
 
 Do not mark the release as pre-release unless it actually is.
 
