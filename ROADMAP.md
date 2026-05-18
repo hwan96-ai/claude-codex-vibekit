@@ -97,6 +97,26 @@ Addresses three findings from the v0.2.0 release audit.
   as STALE (already fixed in v0.2.0); confirmed by repo-wide grep on the
   v0.2.1 branch.
 
+## v0.2.3 — In progress (README hotfix)
+
+Documentation-only. No installer, hook, script, or slash-command
+behavior changes. Reacts to a live GitHub README review of the v0.2.2
+landing page.
+
+- README Install section trimmed: dropped the duplicated "Recommended"
+  clone/install block (already covered by the top TL;DR), collapsed
+  the Project-scoped install and Opt-in bootstrap blocks into compact
+  paragraphs, and pointed at `docs/INSTALLATION.md` for the full
+  walkthrough.
+- Install-modes table gained a "Who it's for" column so picking a mode
+  does not require reading paragraph text.
+- README.ko aligned to the same shape with natural Korean.
+- Repo-wide check for stale `YOUR-USERNAME`, `[YOUR NAME]`, and
+  `d octor` patterns: only historical audit-finding references remain
+  in CHANGELOG / ROADMAP. No active placeholders or `doctor` typo in
+  README content.
+- v1.0.0 stability criteria unchanged.
+
 ## v0.2.2 — In progress (README landing polish)
 
 Documentation-only. No installer, hook, script, or slash-command behavior

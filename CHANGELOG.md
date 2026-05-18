@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] — Unreleased
+
+README hotfix. Documentation-only. No installer, hook, script, or
+slash-command behavior changes.
+
+### Changed
+- `README.md` Install section trimmed: removed the duplicated
+  "Recommended" clone/install block (the same commands already appear
+  in the top TL;DR), collapsed the Project-scoped install block into a
+  short callout under the mode table, and shortened the Opt-in
+  bootstrap block to one paragraph. Full walkthrough now lives in
+  [`docs/INSTALLATION.md`](docs/INSTALLATION.md), linked from the new
+  closing line of the Install section.
+- `README.md` install-modes table now has a third column ("Who it's
+  for") so picking a mode does not require reading paragraph text.
+- `README.ko.md` mirrors the same simplification in natural Korean.
+
+### Verified during this hotfix
+- Repo-wide grep for `YOUR-USERNAME`, `[YOUR NAME]`, `d octor`,
+  `.\d octor` against the v0.2.2 tree found no active occurrences in
+  README content; the only matches are historical audit-finding
+  references in `CHANGELOG.md` and `ROADMAP.md`. No literal placeholder
+  or `doctor` typo was present to fix — the simplification removes the
+  duplicated install block that would have been the place such a typo
+  could have hidden.
+- All README copy-paste commands (`./install.sh ...`,
+  `.\install.ps1 ...`, `./doctor.sh ...`, `.\doctor.ps1 ...`,
+  `bash scripts/generate-checksums.sh --check`,
+  `.\scripts\generate-checksums.ps1 -Check`) match the scripts on disk.
+
+### Not changed
+- `install.sh`, `install.ps1`, `doctor.sh`, `doctor.ps1`, uninstall
+  scripts, hooks, slash commands, tests, CI workflow, `SHA256SUMS`,
+  release tags, or GitHub releases.
+
 ## [0.2.2] — 2026-05-18
 
 Documentation-only polish for the README landing page. No installer, hook,
