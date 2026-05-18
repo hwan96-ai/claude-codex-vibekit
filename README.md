@@ -160,33 +160,12 @@ Vibekit adds a lightweight safety layer. It does not replace human review. It bu
 
 ## Install
 
-Vibekit installs the local Claude Code commands automatically, then checks optional integrations. It does **not** push, merge, deploy, or silently enable auto-commit.
+The TL;DR at the top already shows the recommended path (`--mode safe`).
+This section is the short reference for picking a mode and a scope. Full
+walkthrough lives in [`docs/INSTALLATION.md`](docs/INSTALLATION.md).
 
-### Recommended
-
-**macOS / Linux / WSL:**
-```bash
-git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
-cd claude-codex-vibekit
-./install.sh --mode safe
-./doctor.sh
-```
-
-**Windows PowerShell:**
-```powershell
-git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
-cd claude-codex-vibekit
-.\install.ps1 -Mode safe
-.\doctor.ps1
-```
-
-The installer:
-- detects your OS and home directory
-- installs `/hwan-refactor-*` slash commands into `~/.claude/commands`
-- copies hooks into `~/.claude/hooks`
-- backs up and safely merges Claude Code settings
-- checks gstack, BMAD, superpowers, compound-engineering, and Codex CLI
-- tells you exactly what still needs manual setup
+Vibekit does **not** push, merge, deploy, or silently enable auto-commit
+in any mode.
 
 ### Install modes
 
@@ -198,91 +177,47 @@ flowchart LR
     class B rec;
 ```
 
-| Mode | What it does |
-|------|--------------|
-| `commands-only` | Safest. Copies slash commands only. No hooks. No `settings.json` changes. |
-| `safe` (default recommendation) | `commands-only` + copies hooks + enables only safety hooks (block dangerous git, session-start branch safety). Auto-commit is **not** enabled. |
-| `full` | `safe` + enables auto-save / auto-commit. The auto-save hook now refuses to commit on `main`/`master`, with risky files in the change set (`.env`, keys, `~/.claude/settings.json`), with obvious secret patterns in the diff, with deletions (unless opted in), or when more than 30 files change. If those checks pass it still runs `git add -A` and may stage unrelated working-tree changes — power-user only; the installer warns first. |
+| Mode | What it does | Who it's for |
+|------|--------------|--------------|
+| `commands-only` | Slash commands only. No hooks. No `settings.json` changes. | Safest. Try this first if you are unsure. |
+| `safe` (recommended) | `commands-only` + safety hooks (block dangerous git, session-start branch safety). Auto-commit is **not** enabled. | Most users. |
+| `full` | `safe` + auto-save / auto-commit. Refuses to commit on `main`/`master`, on risky files (`.env`, keys, `~/.claude/settings.json`), on secret patterns, on deletions, or on >30 changed files. Still runs `git add -A` after checks pass — may stage unrelated working-tree changes. | Power users only; the installer warns first. |
 
-See [`docs/INSTALLATION.md`](docs/INSTALLATION.md) for "Which mode should I choose?", "What PARTIAL means", and the full mode/scope decision tree.
-
-> **Global hook scope.** Hooks installed in `safe` or `full` mode live in `~/.claude` and apply to **every** Claude Code session on this user account, not just to this project. Choose `commands-only` for zero global side effects, or **project scope** (below) to confine everything to `./.claude`.
-
-### Project-scoped install (new in v0.1.3)
-
-If you don't want global side effects but still want hooks for a single
-project, pass `--scope project` (Bash) / `-Scope project` (PowerShell):
-
-```bash
-./install.sh --mode safe --scope project        # writes to ./.claude
-./install.sh --mode safe --claude-home /custom  # explicit path
-```
-```powershell
-.\install.ps1 -Mode safe -Scope project
-.\install.ps1 -Mode safe -ClaudeHome C:\custom
-```
-
-Project scope uses `settings.local.json` (Claude Code's machine-local
-convention, typically gitignored). Running project-scope install inside the
-Vibekit repo itself requires explicit confirmation (or `--yes` / `-Yes`).
-
-### Try it safely first
-
-Use audit-only mode before letting any gate modify files:
-
-```
-/hwan-refactor-idea --audit-only
-/hwan-refactor-code --audit-only
-/hwan-refactor-design --audit-only
-/hwan-refactor-git --audit-only
-```
-
-For the safest install:
-
-```bash
-./install.sh --mode commands-only
-```
+> **Global vs project scope.** Hooks installed in `safe` or `full` live in
+> `~/.claude` and apply to **every** Claude Code session on this user
+> account. To confine everything to `./.claude`, pass
+> `--scope project` (Bash) / `-Scope project` (PowerShell). Project scope
+> uses `settings.local.json` and requires explicit confirmation when run
+> inside the Vibekit repo itself.
 
 ### Optional integrations
 
-`doctor.sh` / `doctor.ps1` will tell you which of these are present and how to install what's missing:
+`doctor.sh` / `doctor.ps1` reports which of these are present and prints
+one-line fix commands for what is missing:
 
-- **gstack** — clone into `~/.claude/skills/gstack` (or pass `--bootstrap`)
-- **BMAD** — runs via `npx bmad-method install` per project (always manual; project-local)
-- **superpowers**, **compound-engineering** — installed through Claude Code's `/plugins` UI (always manual)
-- **Codex CLI** — `npm install -g @openai/codex` (or pass `--bootstrap --bootstrap-codex`)
+- **gstack** — clone into `~/.claude/skills/gstack` (or `--bootstrap`).
+- **BMAD** — `npx bmad-method install` per project (always manual).
+- **superpowers**, **compound-engineering** — installed via Claude Code's
+  `/plugins` UI (always manual).
+- **Codex CLI** — `npm install -g @openai/codex` (or
+  `--bootstrap --bootstrap-codex`).
 
-The doctor exits with `READY`, `PARTIAL`, or `ACTION REQUIRED`.
+Doctor exits `READY`, `PARTIAL`, or `ACTION REQUIRED`. `PARTIAL` is not a
+failure — it usually means core is working and an optional integration is
+not yet installed.
 
-### Opt-in bootstrap (new in v0.1.1)
+### Opt-in bootstrap
 
-The default install never touches external tools. Add `--bootstrap` (or
-`-Bootstrap` on PowerShell) to opt in to safe automatic installs:
+The default install does not touch external tools. Pass `--bootstrap`
+(Bash) / `-Bootstrap` (PowerShell) to opt in to safe automatic installs
+of **gstack** and (with `--bootstrap-codex` / `-BootstrapCodex`) the
+**Codex CLI**. BMAD, superpowers, and compound-engineering remain manual
+with exact commands printed. The same opt-in pass is available against
+an existing install via `./doctor.sh --fix` / `.\doctor.ps1 -Fix`.
 
-```bash
-./install.sh --mode safe --bootstrap                  # interactive prompts
-./install.sh --mode safe --bootstrap --yes            # non-interactive
-./install.sh --mode safe --bootstrap --bootstrap-codex
-```
-```powershell
-.\install.ps1 -Mode safe -Bootstrap
-.\install.ps1 -Mode safe -Bootstrap -Yes
-.\install.ps1 -Mode safe -Bootstrap -BootstrapCodex
-```
-
-What bootstrap can do automatically: clone+setup **gstack**, and (with
-`--bootstrap-codex`) `npm install -g @openai/codex`. What it cannot:
-**BMAD** (project-local), **superpowers** and **compound-engineering**
-(plugin marketplace via Claude Code or Codex). Those remain manual with
-exact commands printed.
-
-`doctor --fix` / `doctor -Fix` runs the same opt-in pass against an
-existing install:
-
-```bash
-./doctor.sh --fix
-.\doctor.ps1 -Fix
-```
+For the bootstrap command surface, scope decision tree, "what PARTIAL
+means", "what to do if ACTION REQUIRED", and the `full` mode warning in
+full, see [`docs/INSTALLATION.md`](docs/INSTALLATION.md).
 
 ## The 4 Gates
 
