@@ -48,9 +48,16 @@ if ($ClaudeHome) {
     $ClaudeHome = Join-Path $UserHome ".claude"
 }
 
+if ($env:CODEX_HOME) {
+    $CodexHome = $env:CODEX_HOME
+} else {
+    $CodexHome = Join-Path $UserHome ".codex"
+}
+
 Write-Info "`n=== Claude-Codex Vibekit Installer (mode: $Mode, scope: $Scope) ==="
 Write-Gray "  home:        $UserHome"
 Write-Gray "  claude_home: $ClaudeHome"
+Write-Gray "  codex_home:  $CodexHome"
 Write-Gray "  repo_root:   $RepoRoot"
 Write-Gray "  cwd:         $Cwd"
 
@@ -103,6 +110,30 @@ Get-ChildItem -Path $cmdSrcDir -Filter "*.md" | ForEach-Object {
         Copy-Item $_.FullName $dst -Force
         Write-OK "  copied $dst"
     }
+}
+
+# ---------- 2b. Codex custom prompts ----------
+# Codex (CLI and Windows app) reads custom prompts from $CodexHome\prompts.
+# Always user-level; -Scope project does not apply to Codex.
+Write-Host "`n[2b] Installing Codex custom prompts into $CodexHome\prompts ..."
+$codexPromptsSrc = Join-Path $RepoRoot "codex-prompts"
+$codexPromptsDst = Join-Path $CodexHome "prompts"
+if (-not (Test-Path $codexPromptsDst)) {
+    New-Item -ItemType Directory -Path $codexPromptsDst -Force | Out-Null
+    Write-OK "  created $codexPromptsDst"
+}
+if (Test-Path $codexPromptsSrc) {
+    Get-ChildItem -Path $codexPromptsSrc -Filter "*.md" | ForEach-Object {
+        $dst = Join-Path $codexPromptsDst $_.Name
+        if (Test-SamePath $_.FullName $dst) {
+            Write-Gray "  skip   $dst (same file)"
+        } else {
+            Copy-Item $_.FullName $dst -Force
+            Write-OK "  copied $dst"
+        }
+    }
+} else {
+    Write-Gray "  skipped (no codex-prompts\ in repo)"
 }
 
 if ($Mode -eq 'commands-only') {
