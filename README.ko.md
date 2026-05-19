@@ -107,19 +107,15 @@ SUMMARY.md 작성됨
 네 게이트의 전체 예시 흐름은 [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md)를
 참고하세요.
 
-## 릴리스 후보 검증 (v0.2.5)
+## 현재 릴리스 검증 (v0.2.5)
 
 <p align="center">
   <img src="docs/assets/doctor-ready.svg" alt="doctor.sh 터미널 출력: READY, commands ok, hooks verified, optional integrations partial" width="520">
 </p>
 
-아래는 이 저장소의 **v0.2.5 릴리스 후보** (현재 `main`, PR #11/#12/#13/#14
-머지 후)에 대해 통과한 체크입니다. **아직 `v0.2.5` 태그는 만들어지지
-않았습니다** — 현재 최신 태그는 여전히 `v0.2.4`입니다. `SHA256SUMS`
-검증과 아래 스모크 체크가 모두 통과한 시점의 `main`에서 v0.2.5 태그가
-생성됩니다. 태그가 생성되면 이 섹션은 "현재 릴리스 검증"으로 승격됩니다.
-아래 항목들은 이 후보에 대한 사실이고, 앞으로의 모든 버전에 대한 일반적
-주장이 아닙니다:
+아래는 이 저장소의 **v0.2.5 태그**에 대해 통과한 체크입니다. 특정
+릴리스에 대한 사실이고, 앞으로의 모든 버전에 대한 일반적 주장이
+아닙니다:
 
 - 새 클론 + `--mode safe` 설치가 깨끗한 계정에서 오류 없이 완료됩니다.
 - `doctor`의 훅 런타임 검증이 통과합니다 (Python 훅 컴파일,
@@ -296,11 +292,11 @@ Phase 7+: 이번 세션 학습 캡처
 태그를 받은 뒤 검증하려면:
 
 ```bash
-git checkout v0.2.4
+git checkout v0.2.5
 bash scripts/generate-checksums.sh --check
 ```
 ```powershell
-git checkout v0.2.4
+git checkout v0.2.5
 .\scripts\generate-checksums.ps1 -Check
 ```
 

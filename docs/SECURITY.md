@@ -207,7 +207,7 @@ Both produce **byte-identical** output (`<sha256>  <relative/path>`, two
 spaces, lowercase hash, forward-slash paths). To verify a fresh clone:
 
 ```bash
-git checkout v0.2.1
+git checkout v0.2.5
 bash scripts/generate-checksums.sh --check
 ```
 

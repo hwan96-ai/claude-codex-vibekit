@@ -94,13 +94,13 @@ Stay away from `--mode full` if any of the following apply:
 
 ## Install from a tag (recommended for production use)
 
-Tagged releases (e.g. `v0.2.1`) are immutable and ship with a verifiable
+Tagged releases (e.g. `v0.2.5`) are immutable and ship with a verifiable
 `SHA256SUMS`. Prefer them over a moving `main`:
 
 ```bash
 git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
 cd claude-codex-vibekit
-git checkout v0.2.1
+git checkout v0.2.5
 bash scripts/generate-checksums.sh --check   # PowerShell: .\scripts\generate-checksums.ps1 -Check
 ./install.sh --mode safe
 ```
