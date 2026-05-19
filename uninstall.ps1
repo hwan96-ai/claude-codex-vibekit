@@ -98,19 +98,34 @@ if (Test-Path $Settings) {
         Copy-Item $Settings "$Settings.backup-$stamp" -Force
         $py = @'
 import json, sys
+
 p = sys.argv[1]
 try:
     with open(p, "r", encoding="utf-8") as f: data = json.load(f)
 except Exception as e:
     print(f"could not parse settings.json: {e}"); sys.exit(0)
-needles = ("block-dangerous-git.py", "session-start.sh", "auto-save.sh")
+
+# Vibekit's installer writes hook commands as `<runtime> <CLAUDE_HOME>/hooks/<basename>`.
+# Anchor the match to a `/hooks/<basename>` path segment so a basename only
+# matches when it sits inside a `hooks/` directory (forward- or backslash-
+# separated), avoiding false positives like `/usr/local/bin/auto-save.sh`.
+basenames = ("block-dangerous-git.py", "session-start.sh", "auto-save.sh")
+
+def is_vibekit_command(cmd):
+    if not cmd:
+        return False
+    return any(
+        f"/hooks/{b}" in cmd or f"\\hooks\\{b}" in cmd
+        for b in basenames
+    )
+
 hooks = data.get("hooks") or {}
 for event in list(hooks.keys()):
     entries = hooks.get(event) or []
     new_entries = []
     for entry in entries:
         inner = entry.get("hooks") or []
-        kept = [h for h in inner if not any(n in (h.get("command") or "") for n in needles)]
+        kept = [h for h in inner if not is_vibekit_command(h.get("command"))]
         if kept:
             entry["hooks"] = kept
             new_entries.append(entry)
