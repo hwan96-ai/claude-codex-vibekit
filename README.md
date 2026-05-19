@@ -112,11 +112,13 @@ walkthrough of all four gates.
 </p>
 
 The following checks pass for the **v0.2.5 release candidate** of this
-repository (the `main` branch at commit `0b3bc4c`, after PRs #11 and #12).
+repository (current `main`, prepared after PRs #11, #12, #13, and #14).
 **No `v0.2.5` git tag exists yet** — the latest tagged release is still
-`v0.2.4`. This section will be promoted to "Current release verification"
-once the tag is cut. Statements below are release-specific, not a general
-claim about all future versions:
+`v0.2.4`. The v0.2.5 tag will be cut from `main` once `SHA256SUMS`
+verification and the final smoke checks below pass. This section will
+be promoted to "Current release verification" once the tag is cut.
+Statements below are release-specific, not a general claim about all
+future versions:
 
 - Fresh clone + `--mode safe` install completes without errors on a clean
   account.
