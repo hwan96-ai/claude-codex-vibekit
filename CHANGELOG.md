@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes after v0.2.5 yet._
 
-## [0.2.5] — prepared (release candidate, tag not yet cut)
+## [0.2.5] — 2026-05-19
 
 Hook-safety and documentation polish over v0.2.4. Two merged PRs combined:
 PR #11 (docs / CI / executable bits) and PR #12 (hook safety gaps).
@@ -76,10 +76,6 @@ Behavior-only changes to hooks; no installer or doctor flow changes.
   `Permission denied (126)` until this was fixed (PR #11).
 
 ### Notes
-- No tag has been cut for these changes yet. The latest tagged release
-  is still `v0.2.4`. The "Release candidate verification (v0.2.5)"
-  section in `README.md` refers to the prepared commit, not to an
-  existing tag.
 - Prior post-v0.2.4 commits already on `main` and included in this
   release: `2027767` (Codex prompt install path), `42a05a5` (installer
   hook runtime hardening), `9aae9c9` and `74b2826` (auto-save / git

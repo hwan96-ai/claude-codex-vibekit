@@ -105,20 +105,15 @@ Wrote: SUMMARY.md
 See [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md) for a full illustrative
 walkthrough of all four gates.
 
-## Release candidate verification (v0.2.5)
+## Current release verification (v0.2.5)
 
 <p align="center">
   <img src="docs/assets/doctor-ready.svg" alt="doctor.sh terminal output showing READY: commands ok, hooks verified, optional integrations partial" width="520">
 </p>
 
-The following checks pass for the **v0.2.5 release candidate** of this
-repository (current `main`, prepared after PRs #11, #12, #13, and #14).
-**No `v0.2.5` git tag exists yet** — the latest tagged release is still
-`v0.2.4`. The v0.2.5 tag will be cut from `main` once `SHA256SUMS`
-verification and the final smoke checks below pass. This section will
-be promoted to "Current release verification" once the tag is cut.
-Statements below are release-specific, not a general claim about all
-future versions:
+The following checks pass for the **v0.2.5 tag** of this repository.
+They are release-specific, not a general claim about all future
+versions:
 
 - Fresh clone + `--mode safe` install completes without errors on a clean
   account.
@@ -301,11 +296,11 @@ files (install / doctor / uninstall scripts on both platforms, all four hooks,
 all five slash commands). To verify after cloning a tag:
 
 ```bash
-git checkout v0.2.4
+git checkout v0.2.5
 bash scripts/generate-checksums.sh --check
 ```
 ```powershell
-git checkout v0.2.4
+git checkout v0.2.5
 .\scripts\generate-checksums.ps1 -Check
 ```
 
