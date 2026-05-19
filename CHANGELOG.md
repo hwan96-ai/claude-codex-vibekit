@@ -7,32 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Post-v0.2.4 hook and installer hardening. Not yet tagged. Summarized
-conservatively from commit subjects and changed files; see the linked
-commits for the authoritative diffs.
+_No unreleased changes after v0.2.5 yet._
+
+## [0.2.5] — prepared (release candidate, tag not yet cut)
+
+Hook-safety and documentation polish over v0.2.4. Two merged PRs combined:
+PR #11 (docs / CI / executable bits) and PR #12 (hook safety gaps).
+Behavior-only changes to hooks; no installer or doctor flow changes.
 
 ### Changed
-- `install.sh` / `install.ps1`: hook runtime safety hardening — installers
-  now record concrete Python and Bash runtimes when wiring Claude Code
-  hooks, and `doctor.sh` / `doctor.ps1` validate that the recorded hook
-  command executables actually resolve (commit `42a05a5`).
-- `.claude/hooks/auto-save.sh` and `auto-save-payload.py`: safer payload
-  handling and stricter staging safeguards before the auto-save commit
-  path runs (commits `9aae9c9`, `74b2826`).
-- `.claude/hooks/block-dangerous-git.py`: additional guarding around
-  argument parsing and protected-branch detection (commit `74b2826`).
+- `.claude/hooks/auto-save.sh`: the deletion guard now runs in both payload
+  and fallback staging modes. Previously payload mode skipped the check
+  because the payload helper silently dropped missing paths; the README
+  guard ("refuses on deletions unless `HWAN_AUTOSAVE_ALLOW_DELETIONS=1`")
+  now matches actual behavior in every mode (PR #12).
+- `.claude/hooks/block-dangerous-git.py`: blocks two more destructive
+  push options:
+  - `git push --mirror` (rewrites every remote ref from local refs and
+    can delete protected branches without naming them).
+  - `git push --prune` (deletes remote refs not present locally).
+- `.claude/hooks/block-dangerous-git.py`: hardens the `git -c` argv
+  parser so a malformed config token cannot hide a destructive
+  subcommand. Three shapes now handled:
+  - `git -c key=value …` (well-formed) — both tokens consumed as before.
+  - `git -c <destructive-verb> …` (e.g. `git -c reset --hard`) — only
+    `-c` is consumed; the verb is detected normally.
+  - `git -c <junk> <destructive-verb> …` (e.g. `git -c foo reset --hard`)
+    — both `-c` and the junk are consumed; the verb that follows is
+    detected normally.
+
+### Documentation
+- `README.md` / `README.ko.md` / `docs/INSTALLATION.md`: clarify that
+  `--scope project` only redirects Claude command/hook installs.
+  Codex custom prompts always install under `$CODEX_HOME/prompts`
+  (default `~/.codex/prompts`) because the Codex CLI does not read
+  project-local prompt paths (PR #11).
+- `README.md` / `README.ko.md` / `CONTRIBUTING.md`: stale `v0.1.x` /
+  `v0.2.3` references replaced with `v0.2.x` / `v0.2.4`; "Project-scoped
+  install mode" removed from the contribution wishlist (already
+  shipped). Restored the curated v0.2.4-era README and CHANGELOG that
+  an earlier installer-hardening merge had inadvertently truncated
+  (PR #11).
 
 ### Added
-- `tests/smoke.sh` and `tests/smoke.ps1`: smoke coverage exercising the
-  Bash and PowerShell install paths end-to-end (commit `42a05a5`).
-- Codex custom-prompt installation: `install.sh` / `install.ps1` now copy
-  `codex-prompts/*.md` into `$CODEX_HOME/prompts` when Codex CLI is
-  detected (commit `2027767`, PR #9).
+- `install.sh` / `install.ps1`: the `bash`-required error message in
+  `safe`/`full` modes now points users at `--mode commands-only` as
+  a no-bash escape hatch (PR #11). `commands-only` itself was already
+  bash-free; this is wording only.
+- `.github/workflows/smoke-tests.yml`: a new "End-to-end smoke" step
+  in both the Ubuntu and Windows jobs runs `tests/smoke.sh` /
+  `tests/smoke.ps1`. These exercise `safe` + `full` install hook
+  runtime embedding, protected-branch commit refusal, and the
+  placeholder-vs-real secret pattern guard — none of which were
+  previously running in CI (PR #11).
+- `tests/test-auto-save.sh`: 3 new cases — payload-mode deletion
+  refusal, `HWAN_AUTOSAVE_ALLOW_DELETIONS=1` escape hatch in payload
+  mode, and a fallback-mode deletion regression guard (PR #12).
+- `tests/test-block-dangerous-git.py`: 10 new cases covering
+  `--mirror` / `--prune` and the three malformed `git -c` shapes,
+  plus positive `git -c key=value` allows (PR #12).
+
+### Fixed
+- `install.sh`, `doctor.sh`, `uninstall.sh`, `tests/smoke.sh`,
+  `tests/smoke-install.sh`, `tests/test-auto-save.sh` now have the
+  POSIX executable bit set (mode `100755`). On Linux, `tests/smoke.sh`
+  invokes `install.sh` directly via its shebang; the missing exec bit
+  caused the new "End-to-end smoke" CI step to fail with
+  `Permission denied (126)` until this was fixed (PR #11).
 
 ### Notes
-- No new release tag has been cut for these changes yet. The latest
-  tagged release is still `v0.2.4`. The "Current release verification"
-  section in `README.md` refers to the `v0.2.4` tag, not to `HEAD`.
+- No tag has been cut for these changes yet. The latest tagged release
+  is still `v0.2.4`. The "Release candidate verification (v0.2.5)"
+  section in `README.md` refers to the prepared commit, not to an
+  existing tag.
+- Prior post-v0.2.4 commits already on `main` and included in this
+  release: `2027767` (Codex prompt install path), `42a05a5` (installer
+  hook runtime hardening), `9aae9c9` and `74b2826` (auto-save / git
+  safety payload handling). PRs #11 and #12 land on top of those.
 
 ## [0.2.4] — 2026-05-18
 

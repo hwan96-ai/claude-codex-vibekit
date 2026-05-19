@@ -105,14 +105,18 @@ Wrote: SUMMARY.md
 See [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md) for a full illustrative
 walkthrough of all four gates.
 
-## Current release verification (v0.2.4)
+## Release candidate verification (v0.2.5)
 
 <p align="center">
   <img src="docs/assets/doctor-ready.svg" alt="doctor.sh terminal output showing READY: commands ok, hooks verified, optional integrations partial" width="520">
 </p>
 
-The following checks pass for the v0.2.4 tag of this repository. They are
-release-specific, not a general claim about all future versions:
+The following checks pass for the **v0.2.5 release candidate** of this
+repository (the `main` branch at commit `0b3bc4c`, after PRs #11 and #12).
+**No `v0.2.5` git tag exists yet** — the latest tagged release is still
+`v0.2.4`. This section will be promoted to "Current release verification"
+once the tag is cut. Statements below are release-specific, not a general
+claim about all future versions:
 
 - Fresh clone + `--mode safe` install completes without errors on a clean
   account.
@@ -122,7 +126,11 @@ release-specific, not a general claim about all future versions:
 - `bash scripts/generate-checksums.sh --check` and
   `.\scripts\generate-checksums.ps1 -Check` both succeed against the shipped
   `SHA256SUMS`.
-- CI smoke tests pass on Ubuntu and Windows.
+- CI smoke tests pass on Ubuntu and Windows, including the end-to-end
+  `tests/smoke.sh` / `tests/smoke.ps1` suites that were wired into CI in
+  PR #11.
+- `tests/test-auto-save.sh` and `tests/test-block-dangerous-git.py` both
+  pass locally, covering the hook-safety hardening from PR #12.
 
 These checks are about the installed kit and the released files. They do
 not promise that running a gate on your code will catch every bug.
