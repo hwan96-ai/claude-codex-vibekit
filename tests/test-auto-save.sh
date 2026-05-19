@@ -194,6 +194,70 @@ case "$last_msg" in
   *)    say FAIL "fallback mode should have refused on deletion (last: $last_msg)"; fail=$((fail+1)) ;;
 esac
 
+# 12. HWAN_AUTOSAVE_MAX_FILES: custom low limit refuses when exceeded (payload mode).
+mkrepo
+( cd "$WORK/repo" && echo a > a.txt && echo b > b.txt && echo c > c.txt )
+PAYLOAD='{"tool_input":{"files":["a.txt","b.txt","c.txt"]}}'
+HWAN_AUTOSAVE_MAX_FILES=2 HWAN_AUTOSAVE_STAGE_MODE=payload \
+  bash -c "cd '$WORK/repo' && printf '%s' '$PAYLOAD' | bash '$HOOK'" >/dev/null 2>&1
+last_msg=$(cd "$WORK/repo" && git log -1 --pretty=%s 2>/dev/null || true)
+case "$last_msg" in
+  seed) say ok "HWAN_AUTOSAVE_MAX_FILES=2 refuses when 3 files in payload" ;;
+  *)    say FAIL "expected refusal when payload exceeds MAX_FILES (last: $last_msg)"; fail=$((fail+1)) ;;
+esac
+
+# 13. HWAN_AUTOSAVE_MAX_FILES: payload at limit still commits.
+mkrepo
+( cd "$WORK/repo" && echo a > a.txt && echo b > b.txt )
+PAYLOAD='{"tool_input":{"files":["a.txt","b.txt"]}}'
+HWAN_AUTOSAVE_MAX_FILES=2 HWAN_AUTOSAVE_STAGE_MODE=payload \
+  bash -c "cd '$WORK/repo' && printf '%s' '$PAYLOAD' | bash '$HOOK'" >/dev/null 2>&1
+last_msg=$(cd "$WORK/repo" && git log -1 --pretty=%s 2>/dev/null || true)
+case "$last_msg" in
+  autosave:*) say ok "HWAN_AUTOSAVE_MAX_FILES=2 allows payload of exactly 2 files" ;;
+  *)          say FAIL "expected autosave commit at MAX_FILES limit (last: $last_msg)"; fail=$((fail+1)) ;;
+esac
+
+# 14. HWAN_AUTOSAVE_MAX_FILES: default 30 refuses a large (all-mode) change set.
+mkrepo
+( cd "$WORK/repo" && for i in $(seq 1 31); do echo "$i" > "f$i.txt"; done )
+HWAN_AUTOSAVE_STAGE_MODE=all bash -c "cd '$WORK/repo' && bash '$HOOK' < /dev/null" >/dev/null 2>&1
+last_msg=$(cd "$WORK/repo" && git log -1 --pretty=%s 2>/dev/null || true)
+case "$last_msg" in
+  seed) say ok "default HWAN_AUTOSAVE_MAX_FILES=30 refuses 31-file change set" ;;
+  *)    say FAIL "expected default MAX_FILES refusal at 31 files (last: $last_msg)"; fail=$((fail+1)) ;;
+esac
+
+# 15. auto-save-payload.py: malformed JSON exits 0 with empty stdout.
+out=$(printf '%s' '{not valid json' | "$PYTHON_BIN" "$HELPER" 2>/dev/null)
+rc=$?
+if [ "$rc" -eq 0 ] && [ -z "$out" ]; then
+  say ok "auto-save-payload.py handles malformed JSON (exit 0, empty stdout)"
+else
+  say FAIL "malformed JSON should exit 0 with empty stdout (rc=$rc, out=$out)"
+  fail=$((fail+1))
+fi
+
+# 16. auto-save-payload.py: empty stdin exits 0 with empty stdout.
+out=$(printf '' | "$PYTHON_BIN" "$HELPER" 2>/dev/null)
+rc=$?
+if [ "$rc" -eq 0 ] && [ -z "$out" ]; then
+  say ok "auto-save-payload.py handles empty stdin (exit 0, empty stdout)"
+else
+  say FAIL "empty stdin should exit 0 with empty stdout (rc=$rc, out=$out)"
+  fail=$((fail+1))
+fi
+
+# 17. auto-save-payload.py: non-JSON binary garbage exits 0 with empty stdout.
+out=$(printf '\x00\x01\x02not-json' | "$PYTHON_BIN" "$HELPER" 2>/dev/null)
+rc=$?
+if [ "$rc" -eq 0 ] && [ -z "$out" ]; then
+  say ok "auto-save-payload.py handles binary garbage (exit 0, empty stdout)"
+else
+  say FAIL "binary garbage should exit 0 with empty stdout (rc=$rc, out=$out)"
+  fail=$((fail+1))
+fi
+
 echo
 if [ "$fail" -gt 0 ]; then
   echo "FAILED: $fail case(s)"
