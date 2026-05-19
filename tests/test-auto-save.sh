@@ -159,6 +159,41 @@ case "$last_msg" in
   *)    say FAIL "risky path should have been refused (last: $last_msg)"; fail=$((fail+1)) ;;
 esac
 
+# 9. Working-tree deletion is refused in payload mode unless explicitly allowed.
+# seed.txt is removed (deletion); a.txt is added and listed in payload. Before
+# the fix the helper would commit a.txt and silently leave the deletion in the
+# working tree, sidestepping the README guard.
+mkrepo
+( cd "$WORK/repo" && rm seed.txt && echo a > a.txt )
+PAYLOAD='{"tool_input":{"file_path":"a.txt"}}'
+HWAN_AUTOSAVE_STAGE_MODE=payload bash -c "cd '$WORK/repo' && printf '%s' '$PAYLOAD' | bash '$HOOK'" >/dev/null 2>&1
+last_msg=$(cd "$WORK/repo" && git log -1 --pretty=%s 2>/dev/null || true)
+case "$last_msg" in
+  seed) say ok "payload mode refuses when working tree has deletions" ;;
+  *)    say FAIL "payload mode should have refused on deletion (last: $last_msg)"; fail=$((fail+1)) ;;
+esac
+
+# 10. HWAN_AUTOSAVE_ALLOW_DELETIONS=1 escape hatch lets payload mode proceed.
+mkrepo
+( cd "$WORK/repo" && rm seed.txt && echo a > a.txt )
+PAYLOAD='{"tool_input":{"file_path":"a.txt"}}'
+HWAN_AUTOSAVE_ALLOW_DELETIONS=1 HWAN_AUTOSAVE_STAGE_MODE=payload bash -c "cd '$WORK/repo' && printf '%s' '$PAYLOAD' | bash '$HOOK'" >/dev/null 2>&1
+last_msg=$(cd "$WORK/repo" && git log -1 --pretty=%s 2>/dev/null || true)
+case "$last_msg" in
+  autosave:*) say ok "HWAN_AUTOSAVE_ALLOW_DELETIONS=1 allows payload mode with deletions" ;;
+  *)          say FAIL "expected autosave commit when deletions allowed (last: $last_msg)"; fail=$((fail+1)) ;;
+esac
+
+# 11. Fallback (all) mode also refuses on deletions by default.
+mkrepo
+( cd "$WORK/repo" && rm seed.txt && echo a > a.txt )
+HWAN_AUTOSAVE_STAGE_MODE=all bash -c "cd '$WORK/repo' && bash '$HOOK' < /dev/null" >/dev/null 2>&1
+last_msg=$(cd "$WORK/repo" && git log -1 --pretty=%s 2>/dev/null || true)
+case "$last_msg" in
+  seed) say ok "fallback (all) mode refuses on deletions by default" ;;
+  *)    say FAIL "fallback mode should have refused on deletion (last: $last_msg)"; fail=$((fail+1)) ;;
+esac
+
 echo
 if [ "$fail" -gt 0 ]; then
   echo "FAILED: $fail case(s)"

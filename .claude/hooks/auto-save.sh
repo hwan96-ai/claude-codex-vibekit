@@ -126,11 +126,15 @@ if [ "$changed_count" -gt "$max_files" ] 2>/dev/null; then
   exit 0
 fi
 
-# Refuse on deletions (only meaningful in fallback mode; payload helper rejects
-# non-existent files already).
-if [ "$USE_PAYLOAD" -eq 0 ] && [ "${HWAN_AUTOSAVE_ALLOW_DELETIONS:-0}" != "1" ]; then
+# Refuse on deletions in the working tree. Applies in both payload and fallback
+# modes: payload mode would otherwise sidestep the README promise that autosave
+# refuses on deletions, because the payload helper drops missing paths
+# silently and the commit would only stage non-deletion edits while leaving
+# the deletions unstaged. Honoring the guard everywhere keeps behavior
+# consistent with the documented contract.
+if [ "${HWAN_AUTOSAVE_ALLOW_DELETIONS:-0}" != "1" ]; then
   if printf '%s\n' "$changed_lines" | awk '{print substr($0,1,2)}' | grep -E '^.D|^D.' >/dev/null 2>&1; then
-    echo "auto-save: refusing — deletions detected. Set HWAN_AUTOSAVE_ALLOW_DELETIONS=1 to allow." >&2
+    echo "auto-save: refusing — deletions detected in working tree. Set HWAN_AUTOSAVE_ALLOW_DELETIONS=1 to allow." >&2
     exit 0
   fi
 fi
