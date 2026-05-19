@@ -177,8 +177,9 @@ if (-not $PythonBin) {
 }
 
 if (-not $BashBin) {
-    Write-Err "  error: bash is required for Vibekit hook scripts."
+    Write-Err "  error: bash is required to register Vibekit hook scripts in $Mode mode."
     Write-Warn2 "  Hooks were copied, but settings.json was NOT modified."
+    Write-Warn2 "  If you only want the slash commands and no hooks, re-run with -Mode commands-only."
     exit 1
 }
 

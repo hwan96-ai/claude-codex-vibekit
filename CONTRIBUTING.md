@@ -1,7 +1,7 @@
 # Contributing
 
-Thanks for considering a contribution. Vibekit is an early v0.1.0 release, so
-small, well-scoped improvements are the most useful right now.
+Thanks for considering a contribution. Vibekit is still stabilizing in the
+v0.2.x line, so small, well-scoped improvements are the most useful right now.
 
 ## Reporting issues
 
@@ -83,7 +83,11 @@ For any change to `install.sh`, `install.ps1`, `doctor.*`, or `uninstall.*`:
 These are intentionally unfilled in the public repo. Do not replace them:
 
 - `LICENSE` — the `[YOUR NAME]` placeholder.
-- `README.md` and `README.ko.md` — the `YOUR-USERNAME` placeholder.
+
+The `YOUR-USERNAME` placeholder previously used in `README.md` /
+`README.ko.md` has been replaced with the real
+`hwan96-ai/claude-codex-vibekit` repository slug. Do not reintroduce a
+placeholder there.
 
 ## Documentation tone
 
@@ -104,7 +108,7 @@ Prefer:
 - repeated mistakes become easier to catch
 - lightweight safety layer
 - installs commands, then checks integrations
-- v0.1.0 initial release
+- early v0.2.x release
 
 ## Documentation required for behavior changes
 
