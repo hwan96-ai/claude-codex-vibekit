@@ -1,12 +1,131 @@
 # Claude-Codex Vibekit
 
-> A lightweight local safety layer for AI-assisted coding on Claude Code (optionally compatible with Codex CLI). PRD → Code → Design → Release, with checks at each step. **v0.1.0 — initial release.**
+> **Not another AI coding agent.** A local quality-gate workflow for Claude Code users (Codex CLI optional). PRD → Code → Design → Release, with checks at each step.
 
+[![smoke-tests](https://github.com/hwan96-ai/claude-codex-vibekit/actions/workflows/smoke-tests.yml/badge.svg?branch=main)](https://github.com/hwan96-ai/claude-codex-vibekit/actions/workflows/smoke-tests.yml)
+[![Latest release](https://img.shields.io/github/v/release/hwan96-ai/claude-codex-vibekit?sort=semver)](https://github.com/hwan96-ai/claude-codex-vibekit/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Ready-blue)](https://claude.com/code)
 [![Codex CLI](https://img.shields.io/badge/Codex_CLI-Optional-green)](https://github.com/openai/codex)
 
 **한국어 README**: [README.ko.md](README.ko.md)
+
+## TL;DR
+
+```bash
+git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
+cd claude-codex-vibekit
+./install.sh --mode safe         # PowerShell: .\install.ps1 -Mode safe
+./doctor.sh                       #             .\doctor.ps1
+```
+
+Then, inside Claude Code, run a gate in audit-only mode first:
+
+```
+/hwan-refactor-idea --audit-only
+```
+
+Audit-only writes `SUMMARY.md` and stops. No file edits. No commits. No push.
+
+## The 30-second version
+
+- **You direct the work.** PRD, scope, and merge decisions stay with you.
+- **Claude Code helps generate code.** Vibekit does not write features for you.
+- **Vibekit adds local gates** before code lands on `main` or a release.
+- **Start with `--audit-only`.** Every gate has it; it never edits, commits, or pushes.
+- **No automatic push, PR, merge, or deploy.** Ever.
+
+**Workflow:** **PRD → Code → Design → Release.** Each gate is a slash command
+you run inside Claude Code. Audit-only mode is available on every gate.
+
+<details>
+<summary>Workflow diagram</summary>
+
+```mermaid
+flowchart LR
+    PRD["PRD Gate<br/>/hwan-refactor-idea"] --> Code["Code Gate<br/>/hwan-refactor-code"]
+    Code --> Design["Design Gate<br/>/hwan-refactor-design"]
+    Design --> Release["Release Gate<br/>/hwan-refactor-git"]
+```
+
+</details>
+
+## Before / After
+
+| | Before Vibekit | After Vibekit (audit-only) |
+|---|---|---|
+| **Output** | AI changed files; unclear risk. | Gate summary with P0/P1/P2/P3 findings. |
+| **Files touched** | Whatever AI decided. | None (audit-only writes `SUMMARY.md`). |
+| **Commits / push** | Possibly already happened. | Never automatic; you decide. |
+| **Repeatable** | Each session starts from scratch. | Per-project learning notes carry over. |
+
+Audit-only is the default starting point. Auto-fix and auto-commit are opt-in
+modes documented under [Install](#install) and
+[`docs/SECURITY.md`](docs/SECURITY.md).
+
+## Why this exists
+
+AI coding tools are fast at *writing* changes. They are not, by themselves,
+careful about *what should not ship*. Vibekit sits between "AI wrote a diff"
+and "the diff lands on `main` or production" and adds local quality gates
+around that handoff. It is opinionated about workflow, not about your code.
+
+## What you get
+
+- **4 quality gates** as slash commands — PRD, Code, Design, Release.
+- **Audit-only mode** on every gate (no file edits, no commits, no push).
+- **Optional git safety hooks** — block force-push, block direct commits to
+  `main`/`master`, refuse risky auto-commits.
+- **Doctor** — `READY` / `PARTIAL` / `ACTION REQUIRED` status with one-line
+  fix commands per missing item.
+- **Install smoke checks** — installer verifies hooks compile and actually
+  block what they claim to block before reporting success.
+- **`SHA256SUMS`** — verify the 15 release-relevant files match the tag.
+
+## Illustrative example
+
+This is what an audit-only run looks like (shape only — your output will
+differ; this is **not** a benchmark):
+
+```text
+$ /hwan-refactor-code --audit-only
+
+== Phase 1-3: multi-perspective audit ==
+P0  (must fix)   : 0 findings
+P1  (should fix) : 2 findings  src/api/handler.ts, src/db/migrate.sql
+P2  (nice fix)   : 5 findings
+P3  (note)       : 3 findings
+
+Files touched:  none  (audit-only)
+Commits made:   none
+Push attempted: no
+Wrote: SUMMARY.md
+```
+
+See [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md) for a full illustrative
+walkthrough of all four gates.
+
+## Current release verification (v0.2.4)
+
+<p align="center">
+  <img src="docs/assets/doctor-ready.svg" alt="doctor.sh terminal output showing READY: commands ok, hooks verified, optional integrations partial" width="520">
+</p>
+
+The following checks pass for the v0.2.4 tag of this repository. They are
+release-specific, not a general claim about all future versions:
+
+- Fresh clone + `--mode safe` install completes without errors on a clean
+  account.
+- `doctor` hook runtime verification passes (Python hooks compile,
+  `block-dangerous-git.py` blocks a force push and allows a normal push,
+  every configured hook path resolves to a real file).
+- `bash scripts/generate-checksums.sh --check` and
+  `.\scripts\generate-checksums.ps1 -Check` both succeed against the shipped
+  `SHA256SUMS`.
+- CI smoke tests pass on Ubuntu and Windows.
+
+These checks are about the installed kit and the released files. They do
+not promise that running a gate on your code will catch every bug.
 
 ## What is this?
 
@@ -20,6 +139,8 @@ It is a **local quality-gate workflow** that wraps your existing Claude Code (an
 4. **Release Gate** (`/hwan-refactor-git`) — pre-deployment security / QA / docs check
 
 Plus optional git safety hooks, rollback rules, and per-project learning notes so repeated mistakes become easier to catch.
+
+See [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md) for an illustrative walkthrough of all four gates and a "first 10 minutes" guide.
 
 ## Who is this for?
 
@@ -63,112 +184,69 @@ Vibekit adds a lightweight safety layer. It does not replace human review. It bu
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 - Node.js 20+
-- Git, Bash, Python 3
+- Git, Python 3
 - (Optional) [Codex CLI](https://github.com/openai/codex)
 
 ## Install
 
-Vibekit installs the local Claude Code commands automatically, then checks optional integrations. It does **not** push, merge, deploy, or silently enable auto-commit.
+The TL;DR at the top already shows the recommended path (`--mode safe`).
+This section is the short reference for picking a mode and a scope. Full
+walkthrough lives in [`docs/INSTALLATION.md`](docs/INSTALLATION.md).
 
-### Recommended
-
-**macOS / Linux / WSL:**
-```bash
-git clone https://github.com/YOUR-USERNAME/claude-codex-vibekit.git
-cd claude-codex-vibekit
-./install.sh --mode safe
-./doctor.sh
-```
-
-**Windows PowerShell:**
-```powershell
-git clone https://github.com/YOUR-USERNAME/claude-codex-vibekit.git
-cd claude-codex-vibekit
-.\install.ps1 -Mode safe
-.\doctor.ps1
-```
-
-The installer:
-- detects your OS and home directory
-- installs `/hwan-refactor-*` slash commands into `~/.claude/commands`
-- copies hooks into `~/.claude/hooks`
-- backs up and safely merges Claude Code settings
-- checks gstack, BMAD, superpowers, compound-engineering, and Codex CLI
-- tells you exactly what still needs manual setup
+Vibekit does **not** push, merge, deploy, or silently enable auto-commit
+in any mode.
 
 ### Install modes
 
-| Mode | What it does |
-|------|--------------|
-| `commands-only` | Safest. Copies slash commands only. No hooks. No `settings.json` changes. |
-| `safe` (default recommendation) | `commands-only` + copies hooks + enables only safety hooks (block dangerous git, session-start branch safety). Auto-commit is **not** enabled. |
-| `full` | `safe` + enables auto-save / auto-commit. The auto-save hook now refuses to commit on `main`/`master`, with risky files in the change set (`.env`, keys, `~/.claude/settings.json`), with obvious value-bearing secret/access-token patterns in the diff, with deletions (unless opted in), or when more than 30 files change. If those checks pass it still runs `git add -A` and may stage unrelated working-tree changes — power-user only; the installer warns first. |
-
-> **Global hook scope.** Hooks installed in `safe` or `full` mode live in `~/.claude` and apply to **every** Claude Code session on this user account, not just to this project. Choose `commands-only` if you want zero global side effects.
-
-### Try it safely first
-
-Use audit-only mode before letting any gate modify files:
-
-```
-/hwan-refactor-idea --audit-only
-/hwan-refactor-code --audit-only
-/hwan-refactor-design --audit-only
-/hwan-refactor-git --audit-only
+```mermaid
+flowchart LR
+    A["commands-only<br/>slash commands only"] --> B["safe<br/>+ safety hooks"]
+    B --> C["full<br/>+ auto-save/commit"]
+    classDef rec fill:#e0f0ff,stroke:#3070b0;
+    class B rec;
 ```
 
-For the safest install:
+| Mode | What it does | Who it's for |
+|------|--------------|--------------|
+| `commands-only` | Slash commands only. No hooks. No `settings.json` changes. | Safest. Try this first if you are unsure. |
+| `safe` (recommended) | `commands-only` + safety hooks (block dangerous git, session-start branch safety). Auto-commit is **not** enabled. | Most users. |
+| `full` | `safe` + auto-save / auto-commit. Refuses to commit on `main`/`master`, on risky files (`.env`, keys, `~/.claude/settings.json`), on secret patterns, on deletions, or on >30 changed files. Still runs `git add -A` after checks pass — may stage unrelated working-tree changes. | Power users only; the installer warns first. |
 
-```bash
-./install.sh --mode commands-only
-```
+> **Global vs project scope.** Hooks installed in `safe` or `full` live in
+> `~/.claude` and apply to **every** Claude Code session on this user
+> account. To confine everything to `./.claude`, pass
+> `--scope project` (Bash) / `-Scope project` (PowerShell). Project scope
+> uses `settings.local.json` and requires explicit confirmation when run
+> inside the Vibekit repo itself.
 
 ### Optional integrations
 
-`doctor.sh` / `doctor.ps1` will tell you which of these are present and how to install what's missing:
+`doctor.sh` / `doctor.ps1` reports which of these are present and prints
+one-line fix commands for what is missing:
 
-- **gstack** — clone into `~/.claude/skills/gstack` (or pass `--bootstrap`)
-- **BMAD** — runs via `npx bmad-method install` per project (always manual; project-local)
-- **superpowers**, **compound-engineering** — installed through Claude Code's `/plugins` UI (always manual)
-- **Codex CLI** — `npm install -g @openai/codex` (or pass `--bootstrap --bootstrap-codex`)
+- **gstack** — clone into `~/.claude/skills/gstack` (or `--bootstrap`).
+- **BMAD** — `npx bmad-method install` per project (always manual).
+- **superpowers**, **compound-engineering** — installed via Claude Code's
+  `/plugins` UI (always manual).
+- **Codex CLI** — `npm install -g @openai/codex` (or
+  `--bootstrap --bootstrap-codex`).
 
-The doctor exits with `READY`, `PARTIAL`, or `ACTION REQUIRED`.
+Doctor exits `READY`, `PARTIAL`, or `ACTION REQUIRED`. `PARTIAL` is not a
+failure — it usually means core is working and an optional integration is
+not yet installed.
 
-### Opt-in bootstrap (new in v0.1.1)
+### Opt-in bootstrap
 
-The default install never touches external tools. Add `--bootstrap` (or
-`-Bootstrap` on PowerShell) to opt in to safe automatic installs:
+The default install does not touch external tools. Pass `--bootstrap`
+(Bash) / `-Bootstrap` (PowerShell) to opt in to safe automatic installs
+of **gstack** and (with `--bootstrap-codex` / `-BootstrapCodex`) the
+**Codex CLI**. BMAD, superpowers, and compound-engineering remain manual
+with exact commands printed. The same opt-in pass is available against
+an existing install via `./doctor.sh --fix` / `.\doctor.ps1 -Fix`.
 
-```bash
-./install.sh --mode safe --bootstrap                  # interactive prompts
-./install.sh --mode safe --bootstrap --yes            # non-interactive
-./install.sh --mode safe --bootstrap --bootstrap-codex
-```
-```powershell
-.\install.ps1 -Mode safe -Bootstrap
-.\install.ps1 -Mode safe -Bootstrap -Yes
-.\install.ps1 -Mode safe -Bootstrap -BootstrapCodex
-```
-
-What bootstrap can do automatically: clone+setup **gstack**, and (with
-`--bootstrap-codex`) `npm install -g @openai/codex`. What it cannot:
-**BMAD** (project-local), **superpowers** and **compound-engineering**
-(plugin marketplace via Claude Code or Codex). Those remain manual with
-exact commands printed. gstack clone attempts are bounded to 120 seconds where
-supported; if the network is unavailable, bootstrap reports the failure and
-prints the manual recovery command.
-
-`doctor --fix` / `doctor -Fix` runs the same opt-in pass against an
-existing install:
-
-```bash
-./doctor.sh --fix
-.\doctor.ps1 -Fix
-```
-
-On Windows, use `.\doctor.ps1` for the Windows Claude home. `doctor.sh` under
-WSL/Git Bash can inspect a separate Linux-style home; set `CLAUDE_HOME`
-explicitly if you want Bash to check a specific install.
+For the bootstrap command surface, scope decision tree, "what PARTIAL
+means", "what to do if ACTION REQUIRED", and the `full` mode warning in
+full, see [`docs/INSTALLATION.md`](docs/INSTALLATION.md).
 
 ## The 4 Gates
 
@@ -199,6 +277,38 @@ Phase 7+: Capture session learnings (for next time)
 /hwan-refactor-code --resume     # Continue from last incomplete run
 ```
 
+## Verify release files
+
+Each tagged release ships a `SHA256SUMS` file covering the 15 release-relevant
+files (install / doctor / uninstall scripts on both platforms, all four hooks,
+all five slash commands). To verify after cloning a tag:
+
+```bash
+git checkout v0.2.4
+bash scripts/generate-checksums.sh --check
+```
+```powershell
+git checkout v0.2.4
+.\scripts\generate-checksums.ps1 -Check
+```
+
+Both scripts produce byte-identical output (`<sha256>  <relative/path>`,
+lowercase hash, two spaces, forward-slash paths), so a clone verified on Linux
+matches one verified on Windows.
+
+**What `SHA256SUMS` protects against:** accidental file corruption during
+download, mirror tampering, partial clones.
+**What it does NOT protect against:** a compromised repository owner account
+publishing a malicious tag alongside a malicious `SHA256SUMS`. Prefer
+**tagged releases** over installing from a moving `main`. See
+[`docs/SECURITY.md`](docs/SECURITY.md) for the full supply-chain note.
+
+The `safe` and `full` installers also verify after copying hooks: every hook
+file exists, Python hooks compile, and `block-dangerous-git.py` actually
+blocks a force push and allows a normal push. If any check fails, the
+installer exits non-zero and prints OS-specific diagnostic steps — it will
+not claim success.
+
 ## Safety model
 
 What Vibekit will and will not do.
@@ -215,7 +325,7 @@ What Vibekit will and will not do.
 - Back up `~/.claude/settings.json` before any modification.
 
 **Additional with `--mode full`:**
-- Auto-save / auto-commit on file edits. The hook now refuses to commit on `main`/`master`, with risky files in the change set (`.env`, `*.pem`, `*.key`, `~/.claude/settings.json`, …), with obvious value-bearing secret/access-token patterns in the diff (API key assignments, GitHub/GitLab/Slack tokens, private keys, `sk-…`), with deletions (unless `HWAN_AUTOSAVE_ALLOW_DELETIONS=1`), or when more than `HWAN_AUTOSAVE_MAX_FILES` (default 30) files change. If those checks pass, it still runs `git add -A` and commits the entire working tree — which can stage unrelated changes. The installer warns explicitly before enabling this. Set `HWAN_AUTOSAVE_DISABLE=1` to disable without uninstalling.
+- Auto-save / auto-commit on file edits. The hook now refuses to commit on `main`/`master`, with risky files in the change set (`.env`, `*.pem`, `*.key`, `~/.claude/settings.json`, …), with obvious secret patterns in the diff (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `BEGIN PRIVATE KEY`, `sk-…`), with deletions (unless `HWAN_AUTOSAVE_ALLOW_DELETIONS=1`), or when more than `HWAN_AUTOSAVE_MAX_FILES` (default 30) files change. If those checks pass, it still runs `git add -A` and commits the entire working tree — which can stage unrelated changes. The installer warns explicitly before enabling this. Set `HWAN_AUTOSAVE_DISABLE=1` to disable without uninstalling.
 
 Test verification, rollback, TDD-first writing, and per-project learning notes come from the underlying skills (gstack, BMAD, superpowers, compound-engineering) — install them separately as the doctor reports.
 
@@ -273,6 +383,15 @@ git safety hooks → prevent accidents
 Reviewed code in a feature branch (you decide to merge)
 ```
 
+## Recommended next docs
+
+If you just want a path through the docs, in order:
+
+1. [Installation](docs/INSTALLATION.md) — modes, scope, bootstrap details.
+2. [Example run](docs/EXAMPLE-RUN.md) — what each gate looks like end-to-end.
+3. [Security](docs/SECURITY.md) — what `safe` and `full` actually change.
+4. [Comparison](docs/COMPARISON.md) — where Vibekit fits vs. Cursor / Aider / Cline / Continue.
+
 ## Documentation
 
 - [Installation Guide](docs/INSTALLATION.md)
@@ -281,17 +400,17 @@ Reviewed code in a feature branch (you decide to merge)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Comparison with Cursor / Aider / Cline / Continue](docs/COMPARISON.md)
 - [Example run (illustrative)](docs/EXAMPLE-RUN.md)
+- [Release / publishing checklist](docs/GITHUB-PUBLISHING.md)
 - [Changelog](CHANGELOG.md) • [Roadmap](ROADMAP.md) • [Contributing](CONTRIBUTING.md)
 - [한국어 가이드](README.ko.md)
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Smaller, scoped PRs are best while
-v0.1.x is stabilizing. Especially welcome:
+v0.2.x is stabilizing. Especially welcome:
 - Translations
 - Installer smoke tests
 - Better plugin detection
-- Project-scoped install mode
 
 ## License
 

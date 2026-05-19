@@ -2,6 +2,145 @@
 
 This guide describes how Vibekit installs itself, what each install mode changes, how to verify with `doctor`, and how to recover or uninstall.
 
+## Which mode should I choose?
+
+| You are… | Pick |
+|----------|------|
+| Trying Vibekit for the first time, want zero side effects | `commands-only` |
+| Most users; want the safety hooks but no auto-commit | `safe` *(recommended)* |
+| Power user who already works on disposable feature branches and *wants* auto-save/commit | `full` (read [`docs/SECURITY.md`](SECURITY.md) first) |
+| Cautious / on a shared account / on a team repo | any mode + `--scope project` |
+
+## Recommended path for first-time users
+
+1. Clone the repo.
+2. `./install.sh --mode safe` (or `--mode commands-only` if hooks make you nervous).
+3. `./doctor.sh` — expect `READY` or `PARTIAL`. PARTIAL is fine.
+4. In Claude Code, run `/hwan-refactor-idea --audit-only` against a throwaway project.
+5. Read `SUMMARY.md`. Iterate.
+
+If anything feels wrong: `./uninstall.sh --yes` reverts cleanly.
+
+## Global vs project-scoped install
+
+- **Global (default)** — installs into `~/.claude`. Affects every Claude Code session on this user account.
+- **Project (`--scope project`)** — installs into `./.claude` of the current project. Only that project's Claude Code session is affected. Writes settings to `settings.local.json` (Claude Code's machine-local convention, usually gitignored). Recommended for shared accounts, team repos, and "I just want to test this on one project" flows.
+
+## What PARTIAL means
+
+Doctor exits `PARTIAL` (rc=1) when the core works but something optional is missing. It is **not** a failure:
+
+- `commands-only` installs always report PARTIAL because the safe-mode hooks are intentionally absent.
+- Optional integrations (gstack, BMAD, superpowers, compound-engineering, Codex CLI) being absent reports PARTIAL.
+
+Audit-only gate flows still work in PARTIAL. CI smoke tests in this repo treat `READY` and `PARTIAL` as success and only fail on `ACTION REQUIRED`.
+
+## What to do if doctor says ACTION REQUIRED
+
+`ACTION REQUIRED` (rc=2) means something the kit needs is broken. Common causes and fixes:
+
+- **Missing `git` / `node` / `python` / `claude` CLI** → install the named tool and re-run.
+- **Core Vibekit command files missing in `<claude_home>/commands/`** → re-run the installer. Check that you ran from inside the cloned repo.
+- **`settings.json` could not be parsed** → restore the most recent `settings.json.backup-YYYYMMDD-HHMMSS` (the installer always backs up before modifying) or fix the JSON by hand.
+
+The `[recommended next steps]` block at the bottom of doctor's output prints the exact command for each item.
+
+## How to update an existing install
+
+Re-run the installer in the same mode. It is idempotent: file copies overwrite only the Vibekit-owned files, and hook entries are matched by `event + matcher + command` so they are not duplicated.
+
+```bash
+git pull
+./install.sh --mode safe
+./doctor.sh
+```
+
+If the upgrade adds new hook files (rare), the installer copies them and the existing `settings.json` keeps working — no entries are removed.
+
+## How to uninstall cleanly
+
+```bash
+./uninstall.sh --yes               # global
+./uninstall.sh --scope project --yes
+```
+
+The uninstaller removes only the five Vibekit slash commands, the three hook scripts, the `auto-save-payload.py` helper, and the hook entries Vibekit added to `settings.json` / `settings.local.json`. Other commands, hooks, and settings keys are preserved. `learnings/` is preserved; delete manually if you want.
+
+## When to use --bootstrap / -Bootstrap
+
+By default the installer never installs external tools. Pass `--bootstrap` only if you want the kit to clone gstack (and, with `--bootstrap-codex`, run `npm install -g @openai/codex`) for you. Everything else (BMAD, superpowers, compound-engineering) remains manual.
+
+Skip bootstrap if you prefer to install those tools yourself or already have them.
+
+## When NOT to use full mode
+
+Stay away from `--mode full` if any of the following apply:
+
+- You routinely have unrelated work-in-progress in the same working tree.
+- You don't want a commit created automatically after every Claude Code edit.
+- You're on a shared account or a long-lived branch where stray autosave commits would matter.
+- You haven't read the `git add -A` warning in [`docs/SECURITY.md`](SECURITY.md).
+
+`safe` is the recommended default. `full` is a power-user mode and the installer warns explicitly before enabling it.
+
+## Install from a tag (recommended for production use)
+
+Tagged releases (e.g. `v0.2.1`) are immutable and ship with a verifiable
+`SHA256SUMS`. Prefer them over a moving `main`:
+
+```bash
+git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
+cd claude-codex-vibekit
+git checkout v0.2.1
+bash scripts/generate-checksums.sh --check   # PowerShell: .\scripts\generate-checksums.ps1 -Check
+./install.sh --mode safe
+```
+
+If `--check` reports a mismatch on a freshly cloned tag, **do not run the
+installer** — re-clone or report the issue. A mismatch means either the
+clone was corrupted in transit or the published file set does not match
+the published checksums.
+
+## What the installer verifies after copying hooks
+
+In `safe` and `full` modes, the installer runs `[4.5] Verifying installed
+hooks (post-copy runtime smoke)` after copying hook files and merging
+settings. It checks:
+
+1. Every required hook file exists on disk where settings.json points.
+2. Each Python hook compiles under your Python interpreter (`py_compile`).
+3. Each shell hook passes `bash -n` syntax check, where bash is available.
+   On Windows without bash this is a warning, not a failure.
+4. `block-dangerous-git.py` actually behaves: a harmless `git push origin
+   main` exits 0 (allow), a `git push --force` exits 2 (block).
+5. Every hook command path inside `settings.json` / `settings.local.json`
+   resolves to a real file on disk.
+
+If any check fails the installer exits non-zero and does not claim success.
+
+## What to do if hook verification fails
+
+The installer prints OS-specific suggestions when it refuses. Most common
+causes:
+
+- **macOS** — Gatekeeper quarantine on the freshly copied files:
+  `xattr -l ~/.claude/hooks/*`. Remove with `xattr -dr com.apple.quarantine
+  ~/.claude/hooks` after auditing the contents.
+- **Windows** — Defender or another antivirus may quarantine or block
+  execution of `~/.claude/hooks`. Check the antivirus quarantine log, add
+  an allowlist exception for that folder, then rerun the installer.
+- **Linux** — SELinux or AppArmor enforcement on `~/.claude`. Inspect
+  audit logs and adjust the policy or move `CLAUDE_HOME` to a permitted
+  path.
+- **Python missing or on the wrong PATH** — install Python 3 and rerun.
+- **Settings path mismatch** — if you moved `~/.claude` after install,
+  rerun the installer so the new absolute paths are written to
+  `settings.json`.
+
+The same checks live in `doctor.sh` / `doctor.ps1` under
+`[hook runtime verification]`, so you can rerun them at any time without
+reinstalling.
+
 ## Prerequisites
 
 | Tool | Required | Notes |
@@ -9,27 +148,34 @@ This guide describes how Vibekit installs itself, what each install mode changes
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | yes | `claude` CLI must be on PATH |
 | Node.js 20+ | yes | for BMAD and many gstack helpers |
 | Git | yes | |
-| Bash | yes | used by installed hook scripts, including on Windows |
 | Python 3 | yes | used by the installer for safe JSON merging and by the dangerous-git hook |
 | [Codex CLI](https://github.com/openai/codex) | optional | `npm install -g @openai/codex` |
 
 ## Path detection
 
-The installer auto-detects locations:
+The installer picks the install root in this order:
 
-- **macOS / Linux / WSL**
-  - `HOME = $HOME`
-  - `CLAUDE_HOME = ${CLAUDE_HOME:-$HOME/.claude}`
-- **Windows PowerShell**
-  - `HOME = [Environment]::GetFolderPath("UserProfile")` (typically `C:\Users\<you>`)
-  - `CLAUDE_HOME = $env:CLAUDE_HOME` if set, otherwise `<HOME>\.claude`
+1. `--claude-home <path>` / `-ClaudeHome <path>` (explicit path).
+2. `--scope project` / `-Scope project` → `./.claude` under the current
+   working directory.
+3. `CLAUDE_HOME` / `$env:CLAUDE_HOME` environment variable.
+4. Default: `~/.claude` (Bash) or `<UserProfile>\.claude` (PowerShell).
 
-Override by exporting `CLAUDE_HOME` (or `$env:CLAUDE_HOME` on Windows) before running the installer.
+Override by exporting `CLAUDE_HOME` (or `$env:CLAUDE_HOME` on Windows)
+before running, or by passing `--claude-home` explicitly.
 
-On Windows, prefer `install.ps1` / `doctor.ps1` for the normal Windows Claude
-home. Running `doctor.sh` under WSL or Git Bash may inspect a different
-Linux-style home such as `/home/<you>/.claude`. If you intentionally want Bash
-to inspect the Windows install, set `CLAUDE_HOME` explicitly before running it.
+## Install scope
+
+| Scope | Path | Affects | When to use |
+|-------|------|---------|-------------|
+| `global` (default) | `~/.claude` | every Claude Code session on this user account | personal default workstation |
+| `project` | `./.claude` of the current project | only that project's Claude Code session | cautious users, teams, shared accounts |
+
+Project scope writes its settings to `settings.local.json` (Claude Code's
+machine-local convention) so the file is typically gitignored. Running
+project-scope install inside the Vibekit repo itself prints a warning and
+requires confirmation (`--yes` / `-Yes` to skip the prompt). Same-file copies
+inside the repo are skipped rather than failing.
 
 ## Install modes
 
@@ -61,7 +207,7 @@ For power users only. Most users should stay on `safe`.
 
 - Everything in `safe`.
 - Additionally enables `PostToolUse` on `Edit|Write|MultiEdit` → `auto-save.sh`.
-- `auto-save.sh` now runs a series of safeguards before staging anything. It refuses to commit when: not in a git repo, on `main`/`master`, the change set contains risky filenames (`.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa`, `id_ed25519`, `.claude/settings.json`, `.claude/settings.local.json`), the diff contains obvious value-bearing secret/access-token patterns (API key assignments, GitHub/GitLab/Slack tokens, private keys, `sk-…`), the change set exceeds `HWAN_AUTOSAVE_MAX_FILES` (default 30), or any files were deleted (override with `HWAN_AUTOSAVE_ALLOW_DELETIONS=1`).
+- `auto-save.sh` now runs a series of safeguards before staging anything. It refuses to commit when: not in a git repo, on `main`/`master`, the change set contains risky filenames (`.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa`, `id_ed25519`, `.claude/settings.json`, `.claude/settings.local.json`), the diff contains obvious secret patterns (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `BEGIN PRIVATE KEY`, `sk-…`), the change set exceeds `HWAN_AUTOSAVE_MAX_FILES` (default 30), or any files were deleted (override with `HWAN_AUTOSAVE_ALLOW_DELETIONS=1`).
 - On pass, the hook still runs `git add -A && git commit -m "autosave: claude changes <timestamp>"` — i.e. it stages **the entire working tree**, including files Claude Code did not touch. The safeguards just make the worst cases harder to hit.
 - The installer prints an explicit warning before enabling this. Use only if you understand and want that workflow.
 - Kill switch: set `HWAN_AUTOSAVE_DISABLE=1` to make the hook exit immediately without uninstalling.
@@ -71,7 +217,7 @@ For power users only. Most users should stay on `safe`.
 ## macOS / Linux / WSL
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/claude-codex-vibekit.git
+git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
 cd claude-codex-vibekit
 ./install.sh --mode safe
 ./doctor.sh
@@ -82,13 +228,15 @@ Other variants:
 ```bash
 ./install.sh --mode commands-only
 ./install.sh --mode full
+./install.sh --mode safe --scope project           # install into ./.claude
+./install.sh --mode safe --claude-home /custom/dir # explicit path
 ./install.sh --help
 ```
 
 ## Windows PowerShell
 
 ```powershell
-git clone https://github.com/YOUR-USERNAME/claude-codex-vibekit.git
+git clone https://github.com/hwan96-ai/claude-codex-vibekit.git
 cd claude-codex-vibekit
 .\install.ps1 -Mode safe
 .\doctor.ps1
@@ -101,17 +249,35 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -Mode safe
 
 ## Doctor
 
-`doctor.sh` / `doctor.ps1` inspect the environment and print a report. They end with exactly one of:
+`doctor.sh` / `doctor.ps1` inspect the environment and print a report in four
+sections:
 
-- `READY` — required tools present, core Vibekit commands installed, hooks configured if expected.
-- `PARTIAL` — commands installed but one or more optional integrations are missing (codex, gstack, BMAD, superpowers, compound-engineering).
-- `ACTION REQUIRED` — required tools are missing or core command files are not installed.
+- `[core readiness]` — required tools (git, node>=20, python, claude CLI)
+  and the five Vibekit command files.
+- `[hook configuration]` — what hook entries are wired in `settings.json` /
+  `settings.local.json` (project scope).
+- `[optional integrations]` — codex, BMAD, gstack, plugin detection. Plugin
+  presence is heuristic.
+- `[recommended next steps]` — one-line fix command per missing item.
 
-Exit codes: `0` READY, `1` PARTIAL, `2` ACTION REQUIRED. Useful for scripting.
+Verdicts:
 
-On WSL, `doctor.sh` prints a hint when it detects that a Windows Claude home
-also exists. This avoids confusing a healthy Windows install with a missing
-Linux/WSL install.
+- `READY` — required tools present, core Vibekit commands installed, both
+  safe-mode hooks (`PreToolUse`, `SessionStart`) configured, no optional gaps.
+- `PARTIAL` — core OK, but one or more of: optional integrations missing
+  (codex, gstack, BMAD, plugins); safe-mode hooks not configured (typical for
+  `commands-only` installs). Audit-only command flows still work.
+- `ACTION REQUIRED` — required tool missing, core command files missing, or
+  `settings.json` is unparseable.
+
+Exit codes: `0` READY, `1` PARTIAL, `2` ACTION REQUIRED. Useful for scripting
+and for CI smoke tests, which treat 0 and 1 as success.
+
+```bash
+./doctor.sh                            # global
+./doctor.sh --scope project            # inspect ./.claude
+./doctor.sh --claude-home /custom/dir  # explicit path
+```
 
 ## Opt-in bootstrap
 
@@ -145,9 +311,6 @@ Bootstrap will:
 
 At the end, bootstrap prints a report split into: **installed automatically**,
 **skipped**, **manual steps required**, **failures with recovery commands**.
-The gstack clone is bounded to 120 seconds where the platform supports it. If
-the network is down or GitHub is unreachable, bootstrap reports a timeout/fail
-message and prints the manual recovery command instead of waiting indefinitely.
 
 `doctor --fix` / `doctor -Fix` runs the same safe-auto-install pass against
 an existing install:
@@ -230,12 +393,14 @@ If something goes wrong:
 ## Uninstall
 
 ```bash
-./uninstall.sh          # prompts to confirm
-./uninstall.sh --yes    # non-interactive
+./uninstall.sh                       # global, prompts
+./uninstall.sh --yes                 # global, non-interactive
+./uninstall.sh --scope project --yes # project-local
 ```
 ```powershell
 .\uninstall.ps1
 .\uninstall.ps1 -Yes
+.\uninstall.ps1 -Scope project -Yes
 ```
 
 The uninstaller:
@@ -253,9 +418,6 @@ Inspect `~/.claude/settings.json`. Doctor's `[settings.json hook entries]` secti
 
 **`python` not found on Windows**
 Install Python 3 from python.org or the Microsoft Store. The installer needs it for safe JSON merging.
-
-**`bash` not found on Windows**
-Install Git for Windows and ensure Git Bash is on PATH. Vibekit hook scripts are Bash scripts.
 
 **`bmad-method` reports missing**
 This is normal until you run `npx bmad-method install` in a project. It does not block Vibekit commands.
