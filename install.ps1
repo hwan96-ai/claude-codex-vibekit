@@ -77,6 +77,9 @@ foreach ($cand in @('python','python3','py')) {
     $c = Get-Command $cand -ErrorAction SilentlyContinue
     if ($c) { $PythonBin = $c.Source; break }
 }
+$BashBin = $null
+$bashCmd = Get-Command bash -ErrorAction SilentlyContinue
+if ($bashCmd) { $BashBin = $bashCmd.Source }
 
 # ---------- 1. Directories ----------
 Write-Host "`n[1] Ensuring directories exist..."
@@ -173,6 +176,12 @@ if (-not $PythonBin) {
     exit 1
 }
 
+if (-not $BashBin) {
+    Write-Err "  error: bash is required for Vibekit hook scripts."
+    Write-Warn2 "  Hooks were copied, but settings.json was NOT modified."
+    exit 1
+}
+
 if (Test-Path $Settings) {
     $stamp  = Get-Date -Format 'yyyyMMdd-HHmmss'
     $backup = "$Settings.backup-$stamp"
@@ -197,7 +206,18 @@ import json, os, sys
 settings_path = sys.argv[1]
 claude_home   = sys.argv[2]
 enable_autosave = sys.argv[3] == "1"
+bash_bin = sys.argv[4]
 claude_home_fwd = claude_home.replace("\\", "/")
+
+def quote_cmd_arg(value):
+    normalized = value.replace("\\", "/")
+    return '"' + normalized.replace('"', '\\"') + '"'
+
+python_cmd = quote_cmd_arg(sys.executable)
+bash_cmd = quote_cmd_arg(bash_bin)
+
+def hook_path(name):
+    return quote_cmd_arg(f"{claude_home_fwd}/hooks/{name}")
 
 data = {}
 if os.path.exists(settings_path):
@@ -215,27 +235,36 @@ if not isinstance(data, dict):
 
 hooks = data.setdefault("hooks", {})
 
-def ensure_hook(event, matcher, command):
+def ensure_hook(event, matcher, command, script_name):
     entries = hooks.setdefault(event, [])
     for entry in entries:
         if entry.get("matcher", "") == matcher:
             inner = entry.setdefault("hooks", [])
+            before_len = len(inner)
+            inner[:] = [
+                h for h in inner
+                if not (
+                    h.get("type") == "command"
+                    and script_name in (h.get("command") or "")
+                    and h.get("command") != command
+                )
+            ]
             for h in inner:
                 if h.get("type") == "command" and h.get("command") == command:
-                    return False
+                    return len(inner) != before_len
             inner.append({"type": "command", "command": command})
             return True
     entries.append({"matcher": matcher, "hooks": [{"type": "command", "command": command}]})
     return True
 
 added = []
-if ensure_hook("PreToolUse", "Bash", f"python {claude_home_fwd}/hooks/block-dangerous-git.py"):
+if ensure_hook("PreToolUse", "Bash", f"{python_cmd} {hook_path('block-dangerous-git.py')}", "block-dangerous-git.py"):
     added.append("PreToolUse:Bash -> block-dangerous-git.py")
-if ensure_hook("SessionStart", "", f"bash {claude_home_fwd}/hooks/session-start.sh"):
+if ensure_hook("SessionStart", "", f"{bash_cmd} {hook_path('session-start.sh')}", "session-start.sh"):
     added.append("SessionStart -> session-start.sh")
 
 if enable_autosave:
-    if ensure_hook("PostToolUse", "Edit|Write|MultiEdit", f"bash {claude_home_fwd}/hooks/auto-save.sh"):
+    if ensure_hook("PostToolUse", "Edit|Write|MultiEdit", f"{bash_cmd} {hook_path('auto-save.sh')}", "auto-save.sh"):
         added.append("PostToolUse:Edit|Write|MultiEdit -> auto-save.sh")
 
 with open(settings_path, "w", encoding="utf-8") as f:
@@ -252,7 +281,7 @@ else:
 $tmpPy = New-TemporaryFile
 try {
     Set-Content -Path $tmpPy.FullName -Value $pyScript -Encoding UTF8
-    & $PythonBin $tmpPy.FullName $Settings $ClaudeHome $enableAutosave
+    & $PythonBin $tmpPy.FullName $Settings $ClaudeHome $enableAutosave $BashBin
     if ($LASTEXITCODE -ne 0) {
         Write-Err "  settings.json merge failed; existing file was preserved (backup above)."
         exit 1
@@ -311,12 +340,29 @@ if ($PythonBin) {
 # 3) Shell hook syntax check via bash if available. On Windows without WSL or
 #    Git Bash, this is expected to be absent — warn, do not fail.
 $bashCmd = Get-Command bash -ErrorAction SilentlyContinue
+function Get-BashPathCandidates($Path) {
+    $candidates = New-Object System.Collections.ArrayList
+    [void]$candidates.Add($Path)
+    if ($Path -match '^([A-Za-z]):\\(.*)$') {
+        $drive = $matches[1].ToLower()
+        $rest = $matches[2] -replace '\\','/'
+        [void]$candidates.Add("/$drive/$rest")
+        [void]$candidates.Add("/mnt/$drive/$rest")
+    }
+    return $candidates
+}
+function Test-BashSyntax($Path) {
+    foreach ($candidate in (Get-BashPathCandidates $Path)) {
+        & bash -n $candidate 2>$null
+        if ($LASTEXITCODE -eq 0) { return $true }
+    }
+    return $false
+}
 if ($bashCmd) {
     foreach ($rel in @("hooks\session-start.sh","hooks\auto-save.sh")) {
         $p = Join-Path $ClaudeHome $rel
         if (-not (Test-Path -LiteralPath $p)) { continue }
-        & bash -n $p 2>$null
-        if ($LASTEXITCODE -eq 0) {
+        if (Test-BashSyntax $p) {
             Write-OK "  bash -n: $(Split-Path -Leaf $p)"
         } else {
             Write-Err "  bash -n failed: $p"
@@ -349,14 +395,14 @@ function Hook-Smoke($payload, $expected, $label) {
     }
 }
 if ($PythonBin -and (Test-Path -LiteralPath (Join-Path $ClaudeHome "hooks\block-dangerous-git.py"))) {
-    Hook-Smoke '{"tool_input":{"command":"git push origin main"}}'   0 "harmless push allowed"
+    Hook-Smoke '{"tool_input":{"command":"git status --short"}}'     0 "harmless git status allowed"
     Hook-Smoke '{"tool_input":{"command":"git push --force"}}'       2 "dangerous push blocked"
 }
 
 # 5) settings.json hook command paths must point to real files.
 if ((Test-Path -LiteralPath $Settings) -and $PythonBin) {
     $pyPathCheck = @'
-import json, os, re, sys
+import json, os, shlex, shutil, sys
 try:
     with open(sys.argv[1], "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -370,13 +416,19 @@ for event, entries in hooks.items():
     for entry in (entries or []):
         for h in (entry.get("hooks") or []):
             cmd = h.get("command", "")
-            m = re.match(r"^\s*(?:python|python3|bash|sh)\s+(\S+)", cmd)
-            if not m:
+            try:
+                parts = shlex.split(cmd, posix=True)
+            except ValueError:
+                issues.append(f"{event}:{cmd} -> could not parse command")
                 continue
-            path = m.group(1)
+            if not parts:
+                continue
             checked += 1
-            if not os.path.isfile(path):
-                issues.append(f"{event}:{cmd} -> path missing: {path}")
+            runtime = parts[0]
+            if not (os.path.exists(runtime) or shutil.which(runtime)):
+                issues.append(f"{event}:{cmd} -> runtime missing: {runtime}")
+            if len(parts) > 1 and not os.path.isfile(parts[1]):
+                issues.append(f"{event}:{cmd} -> hook file missing: {parts[1]}")
 print(f"CHECKED:{checked}")
 for i in issues:
     print(f"ISSUE:{i}")
@@ -454,6 +506,16 @@ if ($Bootstrap) {
         return ($ans -match '^(y|Y|yes|YES)$')
     }
 
+    function Invoke-GitCloneWithTimeout($destination, $timeoutSeconds = 120) {
+        $args = @('clone', '--single-branch', '--depth', '1', 'https://github.com/garrytan/gstack.git', $destination)
+        $proc = Start-Process -FilePath 'git' -ArgumentList $args -NoNewWindow -PassThru
+        if (-not $proc.WaitForExit($timeoutSeconds * 1000)) {
+            try { $proc.Kill() } catch {}
+            return 124
+        }
+        return $proc.ExitCode
+    }
+
     # gstack
     $gstackDir = Join-Path $ClaudeHome "skills\gstack"
     if (Test-Path $gstackDir) {
@@ -464,8 +526,8 @@ if ($Bootstrap) {
         [void]$bsFail.Add("gstack: install git first")
     } elseif (Confirm-Bootstrap "Clone gstack into $gstackDir and run setup?") {
         New-Item -ItemType Directory -Path (Join-Path $ClaudeHome "skills") -Force | Out-Null
-        & git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git $gstackDir
-        if ($LASTEXITCODE -eq 0) {
+        $cloneExit = Invoke-GitCloneWithTimeout $gstackDir
+        if ($cloneExit -eq 0) {
             $setupPath = Join-Path $gstackDir "setup"
             if (Test-Path $setupPath) {
                 Push-Location $gstackDir
@@ -488,7 +550,7 @@ if ($Bootstrap) {
                 [void]$bsManual.Add("gstack: cd $gstackDir; .\setup")
             }
         } else {
-            [void]$bsFail.Add("gstack clone: git clone https://github.com/garrytan/gstack.git `"$gstackDir`"")
+            [void]$bsFail.Add("gstack clone timed out or failed: git clone https://github.com/garrytan/gstack.git `"$gstackDir`"")
         }
     } else {
         [void]$bsSkip.Add("gstack (declined)")

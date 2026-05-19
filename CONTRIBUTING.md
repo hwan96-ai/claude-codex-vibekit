@@ -37,9 +37,14 @@ For any change to `install.sh`, `install.ps1`, `doctor.*`, or `uninstall.*`:
    CLAUDE_HOME=/tmp/vibekit-test ./uninstall.sh --yes
    ```
    PowerShell equivalent uses `$env:CLAUDE_HOME`.
-2. Run the bash syntax check:
+2. Run the smoke tests and bash syntax check:
    ```bash
+   bash tests/smoke.sh
    bash -n install.sh doctor.sh uninstall.sh .claude/hooks/auto-save.sh
+   ```
+   On Windows PowerShell:
+   ```powershell
+   .\tests\smoke.ps1
    ```
 3. Parse-check PowerShell if available:
    ```powershell
@@ -72,6 +77,13 @@ For any change to `install.sh`, `install.ps1`, `doctor.*`, or `uninstall.*`:
   explicit mode (`full`) with a printed warning.
 - Backups before mutating `settings.json` are mandatory.
 - Hooks must remain idempotent on reinstall.
+
+## Placeholders to leave alone
+
+These are intentionally unfilled in the public repo. Do not replace them:
+
+- `LICENSE` — the `[YOUR NAME]` placeholder.
+- `README.md` and `README.ko.md` — the `YOUR-USERNAME` placeholder.
 
 ## Documentation tone
 

@@ -17,8 +17,8 @@
 #   - risky file paths in change set              → refuse
 #     (.env, .env.*, *.pem, *.key, *.p12, *.pfx, id_rsa, id_ed25519,
 #      .claude/settings.json, .claude/settings.local.json)
-#   - obvious secret patterns in diff             → refuse
-#     (OPENAI_API_KEY, ANTHROPIC_API_KEY, BEGIN PRIVATE KEY, sk-…)
+#   - obvious value-bearing secret/access-token patterns in diff → refuse
+#     (API key assignments, private keys, GitHub/GitLab/Slack tokens, sk-…)
 #   - change set > HWAN_AUTOSAVE_MAX_FILES (30)   → refuse
 #   - any deletions, unless HWAN_AUTOSAVE_ALLOW_DELETIONS=1
 #
@@ -135,12 +135,13 @@ fi
 
 # Secret patterns in the (full) diff. Even in payload mode this is a cheap
 # extra check against accidental commits.
+secret_pattern='((OPENAI_API_KEY|ANTHROPIC_API_KEY|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)[[:space:]]*[:=][[:space:]]*[^[:space:]]{8,}|BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY|sk-[A-Za-z0-9]{8,}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|github_pat_[A-Za-z0-9_]{20,}|ghp_[A-Za-z0-9_]{20,}|gho_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})'
 secret_hit=0
-if git diff --no-color 2>/dev/null | grep -E -q '(OPENAI_API_KEY|ANTHROPIC_API_KEY|BEGIN PRIVATE KEY|sk-[A-Za-z0-9]{8,})'; then
+if git diff --no-color 2>/dev/null | grep -E -q "$secret_pattern"; then
   secret_hit=1
 fi
 if [ "$secret_hit" -eq 0 ]; then
-  if git diff --cached --no-color 2>/dev/null | grep -E -q '(OPENAI_API_KEY|ANTHROPIC_API_KEY|BEGIN PRIVATE KEY|sk-[A-Za-z0-9]{8,})'; then
+  if git diff --cached --no-color 2>/dev/null | grep -E -q "$secret_pattern"; then
     secret_hit=1
   fi
 fi
@@ -148,7 +149,7 @@ if [ "$secret_hit" -eq 0 ]; then
   while IFS= read -r u; do
     [ -z "$u" ] && continue
     [ -f "$u" ] || continue
-    if head -c 65536 "$u" 2>/dev/null | grep -E -q '(OPENAI_API_KEY|ANTHROPIC_API_KEY|BEGIN PRIVATE KEY|sk-[A-Za-z0-9]{8,})'; then
+    if head -c 65536 "$u" 2>/dev/null | grep -E -q "$secret_pattern"; then
       secret_hit=1
       break
     fi
@@ -157,7 +158,7 @@ $(git ls-files --others --exclude-standard 2>/dev/null)
 EOF
 fi
 if [ "$secret_hit" -eq 1 ]; then
-  echo "auto-save: refusing — diff appears to contain a secret (API key or private key)." >&2
+  echo "auto-save: refusing — diff appears to contain a secret or access token." >&2
   exit 0
 fi
 

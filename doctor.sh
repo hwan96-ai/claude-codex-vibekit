@@ -95,7 +95,7 @@ echo "settings:    $SETTINGS_PRIMARY"
 
 # ---------- [core readiness] ----------
 echo -e "\n${CYAN}[core readiness]${NC}"
-for bin in git node; do
+for bin in git node bash; do
   if command -v "$bin" >/dev/null 2>&1; then
     ok "$bin ($($bin --version 2>&1 | head -n1))"
   else
@@ -267,7 +267,7 @@ if [ -f "$block_hook" ]; then
         hook_runtime_fail=$((hook_runtime_fail+1))
       fi
     }
-    smoke_one '{"tool_input":{"command":"git push origin main"}}' 0 "harmless push allowed"
+    smoke_one '{"tool_input":{"command":"git status --short"}}'   0 "harmless git status allowed"
     smoke_one '{"tool_input":{"command":"git push --force"}}'     2 "dangerous push blocked"
   else
     warn "skipped block-dangerous-git.py compile/smoke (python missing)"
@@ -295,7 +295,7 @@ fi
 # detection from earlier.
 if [ -f "$SETTINGS_PRIMARY" ] && [ -n "$PYTHON_BIN" ]; then
   PATH_OUT=$("$PYTHON_BIN" - "$SETTINGS_PRIMARY" <<'PYEOF'
-import json, os, re, sys
+import json, os, shlex, shutil, sys
 try:
     with open(sys.argv[1], "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -309,12 +309,18 @@ for event, entries in hooks.items():
     for entry in (entries or []):
         for h in (entry.get("hooks") or []):
             cmd = h.get("command", "")
-            m = re.match(r"^\s*(?:python|python3|bash|sh)\s+(\S+)", cmd)
-            if not m: continue
-            path = m.group(1)
+            try:
+                parts = shlex.split(cmd, posix=True)
+            except ValueError:
+                issues.append(f"{event}: could not parse command: {cmd}")
+                continue
+            if not parts: continue
+            path = parts[0]
             checked += 1
-            if not os.path.isfile(path):
-                issues.append(f"{event}: {cmd} -> path missing: {path}")
+            if not (os.path.exists(path) or shutil.which(path)):
+                issues.append(f"{event}: {cmd} -> runtime missing: {path}")
+            if len(parts) > 1 and not os.path.isfile(parts[1]):
+                issues.append(f"{event}: {cmd} -> hook file missing: {parts[1]}")
 print(f"CHECKED:{checked}")
 for i in issues:
     print(f"ISSUE:{i}")
@@ -444,6 +450,15 @@ if [ "$FIX" -eq 1 ]; then
 
   fix_auto=(); fix_skip=(); fix_manual=(); fix_fail=()
 
+  clone_with_timeout() {
+    # $1 = destination directory
+    if command -v timeout >/dev/null 2>&1; then
+      timeout 120 git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git "$1"
+    else
+      git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git "$1"
+    fi
+  }
+
   gstack_dir="$CLAUDE_HOME/skills/gstack"
   if [ -d "$gstack_dir" ]; then
     fix_skip+=("gstack (already installed)")
@@ -451,7 +466,7 @@ if [ "$FIX" -eq 1 ]; then
     fix_fail+=("gstack: git missing")
   elif fix_confirm "Clone gstack into $gstack_dir and run setup?"; then
     mkdir -p "$CLAUDE_HOME/skills"
-    if git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git "$gstack_dir"; then
+    if clone_with_timeout "$gstack_dir"; then
       if [ -f "$gstack_dir/setup" ]; then
         ( cd "$gstack_dir" && bash ./setup ) && fix_auto+=("gstack") \
           || fix_fail+=("gstack setup: cd $gstack_dir && ./setup")
@@ -459,7 +474,7 @@ if [ "$FIX" -eq 1 ]; then
         fix_manual+=("gstack: cd $gstack_dir && ./setup (no setup script auto-detected)")
       fi
     else
-      fix_fail+=("gstack clone: git clone https://github.com/garrytan/gstack.git $gstack_dir")
+      fix_fail+=("gstack clone timed out or failed: git clone https://github.com/garrytan/gstack.git $gstack_dir")
     fi
   else
     fix_skip+=("gstack (declined)")

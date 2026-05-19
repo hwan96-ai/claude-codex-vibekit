@@ -159,13 +159,14 @@ if [ "$SCOPE" = "project" ] && [ "$CWD" = "$REPO_ROOT" ]; then
   fi
 fi
 
-# Pick a python3 interpreter for JSON merging
+# Pick interpreters for JSON merging and hook registration.
 PYTHON_BIN=""
 for cand in python3 python; do
   if command -v "$cand" >/dev/null 2>&1; then
-    PYTHON_BIN="$cand"; break
+    PYTHON_BIN="$(command -v "$cand")"; break
   fi
 done
+BASH_BIN="$(command -v bash 2>/dev/null || true)"
 
 # ---------- 1. Directories ----------
 echo -e "\n[1] Ensuring directories exist..."
@@ -264,6 +265,12 @@ if [ -z "$PYTHON_BIN" ]; then
   exit 1
 fi
 
+if [ -z "$BASH_BIN" ]; then
+  echo -e "  ${RED}error:${NC} bash is required for Vibekit hook scripts."
+  echo -e "  ${YELLOW}Hooks were copied, but settings.json was NOT modified.${NC}"
+  exit 1
+fi
+
 if [ -f "$SETTINGS" ]; then
   BACKUP="$SETTINGS.backup-$(date +%Y%m%d-%H%M%S)"
   cp "$SETTINGS" "$BACKUP"
@@ -281,11 +288,21 @@ if [ "$MODE" = "full" ]; then
   echo ""
 fi
 
-"$PYTHON_BIN" - "$SETTINGS" "$CLAUDE_HOME" "$ENABLE_AUTOSAVE" <<'PYEOF'
+"$PYTHON_BIN" - "$SETTINGS" "$CLAUDE_HOME" "$ENABLE_AUTOSAVE" "$BASH_BIN" <<'PYEOF'
 import json, os, sys
 
-settings_path, claude_home, enable_autosave = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
+settings_path, claude_home, enable_autosave, bash_bin = sys.argv[1], sys.argv[2], sys.argv[3] == "1", sys.argv[4]
 claude_home_fwd = claude_home.replace("\\", "/")
+
+def quote_cmd_arg(value):
+    normalized = value.replace("\\", "/")
+    return '"' + normalized.replace('"', '\\"') + '"'
+
+python_cmd = quote_cmd_arg(sys.executable)
+bash_cmd = quote_cmd_arg(bash_bin)
+
+def hook_path(name):
+    return quote_cmd_arg(f"{claude_home_fwd}/hooks/{name}")
 
 data = {}
 if os.path.exists(settings_path):
@@ -303,16 +320,25 @@ if not isinstance(data, dict):
 
 hooks = data.setdefault("hooks", {})
 
-def ensure_hook(event, matcher, command):
+def ensure_hook(event, matcher, command, script_name):
     """Ensure exactly one entry exists for (event, matcher, command). Idempotent."""
     entries = hooks.setdefault(event, [])
     target_cmd = command
     for entry in entries:
         if entry.get("matcher", "") == matcher:
             inner = entry.setdefault("hooks", [])
+            before_len = len(inner)
+            inner[:] = [
+                h for h in inner
+                if not (
+                    h.get("type") == "command"
+                    and script_name in (h.get("command") or "")
+                    and h.get("command") != target_cmd
+                )
+            ]
             for h in inner:
                 if h.get("type") == "command" and h.get("command") == target_cmd:
-                    return False  # already there
+                    return len(inner) != before_len
             inner.append({"type": "command", "command": target_cmd})
             return True
     entries.append({
@@ -322,13 +348,13 @@ def ensure_hook(event, matcher, command):
     return True
 
 added = []
-if ensure_hook("PreToolUse", "Bash", f"python {claude_home_fwd}/hooks/block-dangerous-git.py"):
+if ensure_hook("PreToolUse", "Bash", f"{python_cmd} {hook_path('block-dangerous-git.py')}", "block-dangerous-git.py"):
     added.append("PreToolUse:Bash -> block-dangerous-git.py")
-if ensure_hook("SessionStart", "", f"bash {claude_home_fwd}/hooks/session-start.sh"):
+if ensure_hook("SessionStart", "", f"{bash_cmd} {hook_path('session-start.sh')}", "session-start.sh"):
     added.append("SessionStart -> session-start.sh")
 
 if enable_autosave:
-    if ensure_hook("PostToolUse", "Edit|Write|MultiEdit", f"bash {claude_home_fwd}/hooks/auto-save.sh"):
+    if ensure_hook("PostToolUse", "Edit|Write|MultiEdit", f"{bash_cmd} {hook_path('auto-save.sh')}", "auto-save.sh"):
         added.append("PostToolUse:Edit|Write|MultiEdit -> auto-save.sh")
 
 with open(settings_path, "w", encoding="utf-8") as f:
@@ -423,7 +449,7 @@ if [ -n "$PYTHON_BIN" ] && [ -f "$CLAUDE_HOME/hooks/block-dangerous-git.py" ]; t
   # The hook reads current branch from git rev-parse; override to a feature
   # branch so commit-on-protected logic doesn't fire on the harmless case.
   VIBEKIT_HOOK_TEST_BRANCH="feature/install-smoke" \
-    hook_smoke '{"tool_input":{"command":"git push origin main"}}'   0 "harmless push allowed"
+    hook_smoke '{"tool_input":{"command":"git status --short"}}'     0 "harmless git status allowed"
   VIBEKIT_HOOK_TEST_BRANCH="feature/install-smoke" \
     hook_smoke '{"tool_input":{"command":"git push --force"}}'       2 "dangerous push blocked"
 fi
@@ -431,7 +457,7 @@ fi
 # 5) settings.json hook command paths must point to real files on disk.
 if [ -f "$SETTINGS" ] && [ -n "$PYTHON_BIN" ]; then
   PATH_CHECK=$("$PYTHON_BIN" - "$SETTINGS" <<'PYEOF'
-import json, os, re, sys
+import json, os, shlex, shutil, sys
 try:
     with open(sys.argv[1], "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -441,19 +467,23 @@ except Exception as e:
 hooks = (data.get("hooks") or {})
 issues = []
 checked = 0
-# Heuristic: each hook command starts with `python <path>` or `bash <path>`.
-# Extract the second token (the path) and check it exists.
 for event, entries in hooks.items():
     for entry in (entries or []):
         for h in (entry.get("hooks") or []):
             cmd = h.get("command", "")
-            m = re.match(r"^\s*(?:python|python3|bash|sh)\s+(\S+)", cmd)
-            if not m:
+            try:
+                parts = shlex.split(cmd, posix=True)
+            except ValueError:
+                issues.append(f"{event}:{cmd} -> could not parse command")
                 continue
-            path = m.group(1)
+            if not parts:
+                continue
             checked += 1
-            if not os.path.isfile(path):
-                issues.append(f"{event}:{cmd} -> path missing: {path}")
+            runtime = parts[0]
+            if not (os.path.exists(runtime) or shutil.which(runtime)):
+                issues.append(f"{event}:{cmd} -> runtime missing: {runtime}")
+            if len(parts) > 1 and not os.path.isfile(parts[1]):
+                issues.append(f"{event}:{cmd} -> hook file missing: {parts[1]}")
 print(f"CHECKED:{checked}")
 for i in issues:
     print(f"ISSUE:{i}")
@@ -524,6 +554,15 @@ if [ "$BOOTSTRAP" -eq 1 ]; then
   BS_MANUAL=()
   BS_FAIL=()
 
+  clone_with_timeout() {
+    # $1 = destination directory
+    if command -v timeout >/dev/null 2>&1; then
+      timeout 120 git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git "$1"
+    else
+      git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git "$1"
+    fi
+  }
+
   confirm() {
     # $1 = prompt
     if [ "$BOOTSTRAP_YES" -eq 1 ]; then return 0; fi
@@ -543,7 +582,7 @@ if [ "$BOOTSTRAP" -eq 1 ]; then
       BS_FAIL+=("gstack: install git first")
     elif confirm "Clone gstack into $gstack_dir and run setup?"; then
       mkdir -p "$CLAUDE_HOME/skills"
-      if git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git "$gstack_dir"; then
+      if clone_with_timeout "$gstack_dir"; then
         if [ -x "$gstack_dir/setup" ] || [ -f "$gstack_dir/setup" ]; then
           ( cd "$gstack_dir" && bash ./setup ) && BS_AUTO+=("gstack") || {
             BS_FAIL+=("gstack setup: cd $gstack_dir && ./setup")
@@ -553,7 +592,7 @@ if [ "$BOOTSTRAP" -eq 1 ]; then
           BS_MANUAL+=("gstack: cd $gstack_dir && ./setup")
         fi
       else
-        BS_FAIL+=("gstack clone: git clone https://github.com/garrytan/gstack.git $gstack_dir")
+        BS_FAIL+=("gstack clone timed out or failed: git clone https://github.com/garrytan/gstack.git $gstack_dir")
       fi
     else
       BS_SKIP+=("gstack (declined)")

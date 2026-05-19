@@ -59,7 +59,7 @@ Write-Host "codex_home:  $CodexHome"
 Write-Host "settings:    $SettingsPrimary"
 
 Section "[core readiness]"
-foreach ($bin in @('git','node')) {
+foreach ($bin in @('git','node','bash')) {
     $c = Get-Command $bin -ErrorAction SilentlyContinue
     if ($c) {
         $ver = (& $bin --version 2>$null | Select-Object -First 1)
@@ -236,7 +236,7 @@ if (Test-Path -LiteralPath $blockHook) {
                 $script:hookRuntimeFail++
             }
         }
-        Smoke-One '{"tool_input":{"command":"git push origin main"}}' 0 "harmless push allowed"
+        Smoke-One '{"tool_input":{"command":"git status --short"}}'   0 "harmless git status allowed"
         Smoke-One '{"tool_input":{"command":"git push --force"}}'     2 "dangerous push blocked"
     } else {
         WARN "skipped block-dangerous-git.py compile/smoke (python missing)"
@@ -248,9 +248,26 @@ if (Test-Path -LiteralPath $blockHook) {
 if (Test-Path -LiteralPath $sessionHook) {
     OK "session-start.sh present"
     $bashCmd = Get-Command bash -ErrorAction SilentlyContinue
+    function Get-BashPathCandidates($Path) {
+        $candidates = New-Object System.Collections.ArrayList
+        [void]$candidates.Add($Path)
+        if ($Path -match '^([A-Za-z]):\\(.*)$') {
+            $drive = $matches[1].ToLower()
+            $rest = $matches[2] -replace '\\','/'
+            [void]$candidates.Add("/$drive/$rest")
+            [void]$candidates.Add("/mnt/$drive/$rest")
+        }
+        return $candidates
+    }
+    function Test-BashSyntax($Path) {
+        foreach ($candidate in (Get-BashPathCandidates $Path)) {
+            & bash -n $candidate 2>$null
+            if ($LASTEXITCODE -eq 0) { return $true }
+        }
+        return $false
+    }
     if ($bashCmd) {
-        & bash -n $sessionHook 2>$null
-        if ($LASTEXITCODE -eq 0) {
+        if (Test-BashSyntax $sessionHook) {
             OK "session-start.sh syntax ok"
         } else {
             MISS "session-start.sh bash -n failed"
@@ -263,7 +280,7 @@ if (Test-Path -LiteralPath $sessionHook) {
 
 if ((Test-Path -LiteralPath $SettingsPrimary) -and $Python) {
     $pyPath = @'
-import json, os, re, sys
+import json, os, shlex, shutil, sys
 try:
     with open(sys.argv[1], "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -277,12 +294,18 @@ for event, entries in hooks.items():
     for entry in (entries or []):
         for h in (entry.get("hooks") or []):
             cmd = h.get("command", "")
-            m = re.match(r"^\s*(?:python|python3|bash|sh)\s+(\S+)", cmd)
-            if not m: continue
-            path = m.group(1)
+            try:
+                parts = shlex.split(cmd, posix=True)
+            except ValueError:
+                issues.append(f"{event}: could not parse command: {cmd}")
+                continue
+            if not parts: continue
+            path = parts[0]
             checked += 1
-            if not os.path.isfile(path):
-                issues.append(f"{event}: {cmd} -> path missing: {path}")
+            if not (os.path.exists(path) or shutil.which(path)):
+                issues.append(f"{event}: {cmd} -> runtime missing: {path}")
+            if len(parts) > 1 and not os.path.isfile(parts[1]):
+                issues.append(f"{event}: {cmd} -> hook file missing: {parts[1]}")
 print(f"CHECKED:{checked}")
 for i in issues:
     print(f"ISSUE:{i}")
@@ -419,6 +442,16 @@ if ($Fix) {
     $fxManual = New-Object System.Collections.ArrayList
     $fxFail   = New-Object System.Collections.ArrayList
 
+    function Invoke-GitCloneWithTimeout($destination, $timeoutSeconds = 120) {
+        $args = @('clone', '--single-branch', '--depth', '1', 'https://github.com/garrytan/gstack.git', $destination)
+        $proc = Start-Process -FilePath 'git' -ArgumentList $args -NoNewWindow -PassThru
+        if (-not $proc.WaitForExit($timeoutSeconds * 1000)) {
+            try { $proc.Kill() } catch {}
+            return 124
+        }
+        return $proc.ExitCode
+    }
+
     $gstackDir = Join-Path $ClaudeHome "skills\gstack"
     if (Test-Path $gstackDir) {
         [void]$fxSkip.Add("gstack (already installed)")
@@ -426,8 +459,8 @@ if ($Fix) {
         [void]$fxFail.Add("gstack: git missing")
     } elseif (Confirm-Fix "Clone gstack into $gstackDir and run setup?") {
         New-Item -ItemType Directory -Path (Join-Path $ClaudeHome "skills") -Force | Out-Null
-        & git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git $gstackDir
-        if ($LASTEXITCODE -eq 0) {
+        $cloneExit = Invoke-GitCloneWithTimeout $gstackDir
+        if ($cloneExit -eq 0) {
             $setupPath = Join-Path $gstackDir "setup"
             if (Test-Path $setupPath) {
                 Push-Location $gstackDir
@@ -441,7 +474,7 @@ if ($Fix) {
                 [void]$fxManual.Add("gstack: cd $gstackDir; .\setup (no setup script auto-detected)")
             }
         } else {
-            [void]$fxFail.Add("gstack clone: git clone https://github.com/garrytan/gstack.git `"$gstackDir`"")
+            [void]$fxFail.Add("gstack clone timed out or failed: git clone https://github.com/garrytan/gstack.git `"$gstackDir`"")
         }
     } else {
         [void]$fxSkip.Add("gstack (declined)")
