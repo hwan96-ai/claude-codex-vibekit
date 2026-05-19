@@ -98,6 +98,14 @@ jobs:
         shell: pwsh
         run: python tests/test-block-dangerous-git.py
 
+      - name: checksum tests (Git Bash, CRLF-tolerant)
+        shell: bash
+        run: bash tests/test-checksums.sh
+
+      - name: uninstall anchoring tests (Git Bash)
+        shell: bash
+        run: bash tests/test-uninstall-anchoring.sh
+
       - name: Smoke install (global, commands-only)
         shell: pwsh
         env:
