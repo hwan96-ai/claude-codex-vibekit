@@ -88,10 +88,24 @@ def run() -> int:
         "git push origin master",
         "git push origin HEAD:main",
         "git push origin HEAD:master",
+        "git push --mirror origin",
+        "git push origin --mirror",
+        "git push --prune origin refs/heads/*:refs/heads/*",
+        "git push origin --prune refs/heads/*:refs/heads/*",
         "git -C repo reset --hard",
         "git -C repo clean -fd",
         "git -C repo push origin main",
         "git -c core.safecrlf=false reset --hard",
+        # Malformed -c (no '=') used to swallow the next token as a config
+        # value and let the destructive subcommand slip past detection.
+        # Three shapes: (a) destructive verb directly after `-c`, (b) junk
+        # then destructive verb, (c) destructive verb plus protected ref.
+        "git -c reset --hard",
+        "git -c push origin main",
+        "git -c clean -fd",
+        "git -c foo reset --hard",
+        "git -c foo clean -fd",
+        "git -c foo push origin main",
         "git --git-dir .git --work-tree . reset --hard",
         "git --git-dir=.git --work-tree=. reset --hard",
         "git --no-pager reset --hard",
@@ -109,6 +123,10 @@ def run() -> int:
     print("\nAllowed commands and prose:")
     for cmd in [
         "git push origin feature-branch",
+        # Well-formed `-c key=value` (with '=') stays a config override and
+        # the underlying subcommand (status) remains harmless.
+        "git -c user.name=test status",
+        "git -c http.sslVerify=false fetch origin",
         'gh pr create --body "git clean -f"',
         'echo "git push --force"',
         'echo "ok && git reset --hard"',

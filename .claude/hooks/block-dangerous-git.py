@@ -130,7 +130,26 @@ def git_subcommand_and_args(argv):
     index = 1
     while index < len(argv):
         arg = argv[index]
-        if arg in {"-C", "-c", "--git-dir", "--work-tree"} and index + 1 < len(argv):
+        # -c takes a key=value pair as the NEXT token. Handle three cases:
+        #   1. Well-formed `-c key=value …` → consume both tokens.
+        #   2. Malformed `-c <destructive-verb> …` (e.g. `git -c reset --hard`,
+        #      `git -c push origin main`) → consume only `-c` so the verb
+        #      remains visible to the destructive-subcommand detector.
+        #   3. Malformed `-c <junk> <destructive-verb> …` (e.g.
+        #      `git -c foo reset --hard`) → consume both `-c` and the junk
+        #      so the verb that follows becomes the detected subcommand.
+        # Keep the destructive-verb set in sync with evaluate_git_argv().
+        if arg == "-c" and index + 1 < len(argv):
+            nxt = argv[index + 1]
+            if "=" in nxt:
+                index += 2
+                continue
+            if nxt in {"reset", "clean", "push", "commit", "merge", "branch"}:
+                index += 1
+                continue
+            index += 2
+            continue
+        if arg in {"-C", "--git-dir", "--work-tree"} and index + 1 < len(argv):
             index += 2
             continue
         if arg.startswith("-C") and len(arg) > 2:
@@ -161,6 +180,14 @@ def evaluate_git_argv(argv, branch):
                 return True, "git push force (원격 강제 덮어쓰기)"
             if short_option_has(arg, "f"):
                 return True, "git push -f (원격 강제 덮어쓰기)"
+            # --mirror replaces every ref on the remote with local refs,
+            # including deleting remote refs that no longer exist locally.
+            # --prune deletes remote refs not present locally. Both can
+            # destroy protected branches without naming them explicitly.
+            if arg == "--mirror":
+                return True, "git push --mirror (원격 ref 전체 덮어쓰기/삭제)"
+            if arg == "--prune":
+                return True, "git push --prune (로컬에 없는 원격 ref 삭제)"
             if is_protected_ref(arg):
                 return True, "protected remote ref 직접 push"
         return False, ""
