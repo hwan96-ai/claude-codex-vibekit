@@ -17,21 +17,12 @@ The Windows checkout may have CRLF working-tree files due to `core.autocrlf=true
 Two safe options:
 
 - **Run the generator on Linux/CI.** Easiest and authoritative.
-- **Hash from committed/staged git blobs on Windows.** The blob is always LF-normalized for these files:
+- **Hash from committed/staged git blobs on Windows.** The blob is always LF-normalized for these files. Use [`scripts/checksums-from-blobs.py`](../../scripts/checksums-from-blobs.py):
   ```bash
-  python3 - <<'PY'
-  import subprocess, hashlib
-  files = open("SHA256SUMS").read().split("\n")  # or the FILES list
-  paths = [l.split("  ", 1)[1] for l in files if l.strip()]
-  lines = []
-  for f in paths:
-      blob = subprocess.run(["git", "show", f":{f}"], capture_output=True, check=True).stdout
-      lines.append(f"{hashlib.sha256(blob).hexdigest()}  {f}")
-  lines.sort(key=lambda L: L.split('  ', 1)[1])
-  open("SHA256SUMS", "wb").write(("\n".join(lines) + "\n").encode())
-  PY
+  python3 scripts/checksums-from-blobs.py --check    # verify SHA256SUMS against blobs
+  python3 scripts/checksums-from-blobs.py            # regenerate SHA256SUMS from blobs
   ```
-  This requires the changed files to be staged (`git add <file>`) so `git show :file` resolves to the new content.
+  Reads the release file list from `scripts/generate-checksums.sh` (single source of truth). Changed files must be staged (`git add <file>`) so `git show :file` resolves to the new content.
 
 Validate locally with `bash tests/test-checksums.sh` — the CRLF-tolerant test added in #18 will report committed-blob matches with a `CRLF artifact` diagnostic on Windows checkouts.
 
