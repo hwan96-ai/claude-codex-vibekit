@@ -24,7 +24,9 @@ jobs:
           bash -n .claude/hooks/auto-save.sh
           bash -n .claude/hooks/session-start.sh
           bash -n tests/smoke-install.sh
-          if [ -f tests/test-auto-save.sh ]; then bash -n tests/test-auto-save.sh; fi
+          bash -n tests/test-auto-save.sh
+          bash -n tests/test-checksums.sh
+          bash -n tests/test-uninstall-anchoring.sh
 
       - name: Python compile check
         run: python -m py_compile .claude/hooks/block-dangerous-git.py
@@ -32,13 +34,14 @@ jobs:
       - name: block-dangerous-git unit tests
         run: python tests/test-block-dangerous-git.py
 
-      - name: auto-save tests
-        run: |
-          if [ -f tests/test-auto-save.sh ]; then
-            bash tests/test-auto-save.sh
-          else
-            echo "auto-save tests not present; skipping"
-          fi
+      - name: auto-save hook tests
+        run: bash tests/test-auto-save.sh
+
+      - name: checksum tests
+        run: bash tests/test-checksums.sh
+
+      - name: uninstall anchoring tests
+        run: bash tests/test-uninstall-anchoring.sh
 
       - name: Smoke install (global, commands-only)
         env:
