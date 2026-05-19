@@ -132,21 +132,6 @@ versions:
 These checks are about the installed kit and the released files. They do
 not promise that running a gate on your code will catch every bug.
 
-## What is this?
-
-Vibekit is **not another AI coding agent.** It does not write features for you, and it does not push, merge, or deploy.
-
-It is a **local quality-gate workflow** that wraps your existing Claude Code (and optional Codex CLI) sessions with practical checks:
-
-1. **PRD Gate** (`/hwan-refactor-idea`) — sanity-check your spec before writing code
-2. **Code Gate** (`/hwan-refactor-code`) — review code mid-development, TDD-first where possible
-3. **Design Gate** (`/hwan-refactor-design`) — audit UI/UX with a state coverage matrix
-4. **Release Gate** (`/hwan-refactor-git`) — pre-deployment security / QA / docs check
-
-Plus optional git safety hooks, rollback rules, and per-project learning notes so repeated mistakes become easier to catch.
-
-See [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md) for an illustrative walkthrough of all four gates and a "first 10 minutes" guide.
-
 ## Who is this for?
 
 - Claude Code power users who want a structured review layer around vibe coding.
@@ -171,19 +156,6 @@ Different layer of the stack. Vibekit complements rather than competes.
 | **Vibekit** | Local quality gates around Claude Code workflows: PRD gate, code gate, design gate, release gate, git safety hooks, rollback rules, learning notes |
 
 You can use Vibekit alongside any of these. It assumes you already have an AI helping you write code; it focuses on what to check before that code ships.
-
-## Why?
-
-Vibe coding is fast but risky:
-- AI can break existing features without noticing.
-- The same review oversight repeats across sessions.
-- No structured review means more production surprises.
-
-Vibekit adds a lightweight safety layer. It does not replace human review. It builds on:
-- **gstack** — review skills (Garry Tan's setup)
-- **BMAD** — structured workflows (PRD, market research, etc.)
-- **superpowers** — TDD enforcement, systematic debugging (obra)
-- **compound-engineering** — learning accumulation (EveryInc)
 
 ## Prerequisites
 
@@ -366,18 +338,6 @@ claude
 # 7. Manually decide to merge PR
 gh pr create
 ```
-
-## What This Is NOT
-
-- **Not** an auto-development tool. PRD is yours to write.
-- **Not** auto-deployment. Merging and pushing to main is always your decision.
-- **Not** a replacement for code review by humans on critical changes.
-
-## What This IS
-
-- A safety framework for vibe coding
-- An orchestration layer over gstack + BMAD + superpowers + compound-engineering
-- A way to accumulate project-specific knowledge across sessions
 
 ## Tech Stack
 
