@@ -3,6 +3,8 @@
 #
 # Creates a throwaway git repo in $TMPDIR and exercises:
 #   - payload mode: stages only the listed file
+#   - payload mode: preserves multiple listed files
+#   - payload mode: preserves a listed filename containing spaces
 #   - payload mode refusal when no payload is provided
 #   - auto mode falls back to git add -A when no payload
 #   - outside-repo path in payload is rejected (helper drops it; mode=payload
@@ -65,7 +67,47 @@ case "$last_msg" in
   *) say FAIL "payload mode: no autosave commit created (last: $last_msg)"; fail=$((fail+1)) ;;
 esac
 
-# 2. payload mode refuses with no payload
+# 2. payload mode preserves multiple listed files
+mkrepo
+( cd "$WORK/repo" && echo a > a.txt && echo b > b.txt && echo c > c.txt )
+PAYLOAD='{"tool_input":{"files":["a.txt","b.txt"]}}'
+HWAN_AUTOSAVE_STAGE_MODE=payload bash -c "cd '$WORK/repo' && printf '%s' '$PAYLOAD' | bash '$HOOK'" >/dev/null 2>&1
+last_msg=$(cd "$WORK/repo" && git log -1 --pretty=%s 2>/dev/null || true)
+files_in_commit=$(cd "$WORK/repo" && git show --name-only --pretty='' HEAD 2>/dev/null | tr '\n' ' ')
+case "$last_msg" in
+  autosave:*)
+    case "$files_in_commit" in
+      *a.txt*b.txt*|*b.txt*a.txt*)
+        case "$files_in_commit" in
+          *c.txt*) say FAIL "payload mode preserves multiple files without staging extras (got: $files_in_commit)"; fail=$((fail+1)) ;;
+          *)       say ok "payload mode preserves multiple listed files" ;;
+        esac ;;
+      *) say FAIL "payload mode: commit missing a.txt or b.txt (got: $files_in_commit)"; fail=$((fail+1)) ;;
+    esac ;;
+  *) say FAIL "payload mode: no autosave commit created for multiple files (last: $last_msg)"; fail=$((fail+1)) ;;
+esac
+
+# 3. payload mode preserves a filename containing spaces
+mkrepo
+( cd "$WORK/repo" && echo hello > "hello world.txt" && echo other > other.txt )
+PAYLOAD='{"tool_input":{"file_path":"hello world.txt"}}'
+HWAN_AUTOSAVE_STAGE_MODE=payload bash -c "cd '$WORK/repo' && printf '%s' '$PAYLOAD' | bash '$HOOK'" >/dev/null 2>&1
+last_msg=$(cd "$WORK/repo" && git log -1 --pretty=%s 2>/dev/null || true)
+files_in_commit=$(cd "$WORK/repo" && git show --name-only --pretty='' HEAD 2>/dev/null | tr '\n' ' ')
+case "$last_msg" in
+  autosave:*)
+    case "$files_in_commit" in
+      *"hello world.txt"*)
+        case "$files_in_commit" in
+          *other.txt*) say FAIL "payload mode stages spaced filename without staging extras (got: $files_in_commit)"; fail=$((fail+1)) ;;
+          *)           say ok "payload mode preserves filename containing spaces" ;;
+        esac ;;
+      *) say FAIL "payload mode: commit missing spaced filename (got: $files_in_commit)"; fail=$((fail+1)) ;;
+    esac ;;
+  *) say FAIL "payload mode: no autosave commit created for spaced filename (last: $last_msg)"; fail=$((fail+1)) ;;
+esac
+
+# 4. payload mode refuses with no payload
 mkrepo
 ( cd "$WORK/repo" && echo a > a.txt )
 HWAN_AUTOSAVE_STAGE_MODE=payload bash -c "cd '$WORK/repo' && echo '' | bash '$HOOK'" >/dev/null 2>&1
@@ -75,7 +117,7 @@ case "$last_msg" in
   *)    say FAIL "payload mode should have refused (last commit: $last_msg)"; fail=$((fail+1)) ;;
 esac
 
-# 3. all mode (fallback) stages all changes
+# 5. all mode (fallback) stages all changes
 mkrepo
 ( cd "$WORK/repo" && echo a > a.txt && echo b > b.txt )
 HWAN_AUTOSAVE_STAGE_MODE=all bash -c "cd '$WORK/repo' && bash '$HOOK' < /dev/null" >/dev/null 2>&1
@@ -85,7 +127,7 @@ case "$files_in_commit" in
   *) say FAIL "all mode: expected a.txt and b.txt (got: $files_in_commit)"; fail=$((fail+1)) ;;
 esac
 
-# 4. Outside-repo path in payload is dropped; payload mode then refuses
+# 6. Outside-repo path in payload is dropped; payload mode then refuses
 mkrepo
 ( cd "$WORK/repo" && echo a > a.txt )
 PAYLOAD='{"tool_input":{"file_path":"/etc/passwd"}}'
@@ -96,7 +138,7 @@ case "$last_msg" in
   *)    say FAIL "outside-repo payload should have caused refusal (last commit: $last_msg)"; fail=$((fail+1)) ;;
 esac
 
-# 5. Kill switch
+# 7. Kill switch
 mkrepo
 ( cd "$WORK/repo" && echo a > a.txt )
 HWAN_AUTOSAVE_DISABLE=1 bash -c "cd '$WORK/repo' && bash '$HOOK' < /dev/null" >/dev/null 2>&1
@@ -106,7 +148,7 @@ case "$last_msg" in
   *)    say FAIL "kill switch should have prevented commit (last: $last_msg)"; fail=$((fail+1)) ;;
 esac
 
-# 6. Risky file path is rejected even in payload mode
+# 8. Risky file path is rejected even in payload mode
 mkrepo
 ( cd "$WORK/repo" && echo "OPENAI_API_KEY=x" > .env )
 PAYLOAD='{"tool_input":{"file_path":".env"}}'

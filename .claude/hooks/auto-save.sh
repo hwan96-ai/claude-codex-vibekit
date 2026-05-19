@@ -37,6 +37,14 @@ if [ ! -t 0 ]; then
   PAYLOAD="$(cat 2>/dev/null || true)"
 fi
 
+PAYLOAD_PATHS_FILE=""
+cleanup_payload_paths_file() {
+  if [ -n "$PAYLOAD_PATHS_FILE" ]; then
+    rm -f "$PAYLOAD_PATHS_FILE"
+  fi
+}
+trap cleanup_payload_paths_file EXIT
+
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
 branch=$(git branch --show-current 2>/dev/null)
@@ -61,7 +69,6 @@ case "$STAGE_MODE" in
 esac
 
 # ---- Optional payload-aware staging ----
-PAYLOAD_PATHS_RAW=""
 if [ "$STAGE_MODE" != "all" ] && [ -n "$PAYLOAD" ]; then
   PYTHON_BIN=""
   for cand in python3 python; do
@@ -74,18 +81,26 @@ if [ "$STAGE_MODE" != "all" ] && [ -n "$PAYLOAD" ]; then
     if [ -f "$p" ]; then HELPER="$p"; break; fi
   done
   if [ -n "$PYTHON_BIN" ] && [ -n "$HELPER" ]; then
-    # Helper prints NUL-separated repo-relative paths on success.
-    PAYLOAD_PATHS_RAW="$(printf '%s' "$PAYLOAD" | "$PYTHON_BIN" "$HELPER" 2>/dev/null || true)"
+    PAYLOAD_PATHS_FILE="$(mktemp "${TMPDIR:-/tmp}/vibekit-payload-paths.XXXXXX")" || PAYLOAD_PATHS_FILE=""
+    if [ -n "$PAYLOAD_PATHS_FILE" ]; then
+      # Helper prints NUL-separated repo-relative paths on success. Keep that
+      # output in a file because Bash variables cannot preserve NUL bytes.
+      printf '%s' "$PAYLOAD" | "$PYTHON_BIN" "$HELPER" >"$PAYLOAD_PATHS_FILE" 2>/dev/null || true
+      if [ ! -s "$PAYLOAD_PATHS_FILE" ]; then
+        rm -f "$PAYLOAD_PATHS_FILE"
+        PAYLOAD_PATHS_FILE=""
+      fi
+    fi
   fi
 fi
 
-if [ "$STAGE_MODE" = "payload" ] && [ -z "$PAYLOAD_PATHS_RAW" ]; then
+if [ "$STAGE_MODE" = "payload" ] && [ -z "$PAYLOAD_PATHS_FILE" ]; then
   echo "auto-save: refusing — HWAN_AUTOSAVE_STAGE_MODE=payload but no valid payload file list found." >&2
   exit 0
 fi
 
 USE_PAYLOAD=0
-if [ -n "$PAYLOAD_PATHS_RAW" ]; then
+if [ -n "$PAYLOAD_PATHS_FILE" ]; then
   USE_PAYLOAD=1
 fi
 
@@ -99,7 +114,7 @@ fi
 
 if [ "$USE_PAYLOAD" -eq 1 ]; then
   # Convert NUL-separated payload paths into newline-separated for matching.
-  paths=$(printf '%s' "$PAYLOAD_PATHS_RAW" | tr '\0' '\n' | sed '/^$/d')
+  paths=$(tr '\0' '\n' < "$PAYLOAD_PATHS_FILE" | sed '/^$/d')
 else
   paths=$(printf '%s\n' "$changed_lines" | awk '{ s=substr($0,4); print s }')
 fi
