@@ -26,6 +26,15 @@ If anything feels wrong: `./uninstall.sh --yes` reverts cleanly.
 - **Global (default)** — installs into `~/.claude`. Affects every Claude Code session on this user account.
 - **Project (`--scope project`)** — installs into `./.claude` of the current project. Only that project's Claude Code session is affected. Writes settings to `settings.local.json` (Claude Code's machine-local convention, usually gitignored). Recommended for shared accounts, team repos, and "I just want to test this on one project" flows.
 
+> **Codex prompts are not scoped.** The Codex CLI only reads custom
+> prompts from `$CODEX_HOME/prompts` (default `~/.codex/prompts`).
+> Both `install.sh` and `install.ps1` always copy `codex-prompts/*.md`
+> to that path, even when invoked with `--scope project`. If you need
+> a strictly project-local install with **no** writes under `$HOME`,
+> either skip `--bootstrap-codex`, unset `CODEX_HOME`/redirect it to a
+> project path before running the installer, or remove
+> `$CODEX_HOME/prompts/hwan-refactor-*.md` afterward.
+
 ## What PARTIAL means
 
 Doctor exits `PARTIAL` (rc=1) when the core works but something optional is missing. It is **not** a failure:

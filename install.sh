@@ -266,8 +266,9 @@ if [ -z "$PYTHON_BIN" ]; then
 fi
 
 if [ -z "$BASH_BIN" ]; then
-  echo -e "  ${RED}error:${NC} bash is required for Vibekit hook scripts."
+  echo -e "  ${RED}error:${NC} bash is required to register Vibekit hook scripts in $MODE mode."
   echo -e "  ${YELLOW}Hooks were copied, but settings.json was NOT modified.${NC}"
+  echo -e "  ${YELLOW}If you only want the slash commands and no hooks, re-run with --mode commands-only.${NC}"
   exit 1
 fi
 

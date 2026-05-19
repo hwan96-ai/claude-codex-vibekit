@@ -212,10 +212,17 @@ flowchart LR
 
 > **글로벌 vs 프로젝트 스코프.** `safe` / `full`에서 설치되는 훅은
 > `~/.claude`에 있어서 이 사용자 계정의 **모든** Claude Code 세션에
-> 적용됩니다. 이 프로젝트에만 적용하고 싶으면 `--scope project`
-> (Bash) / `-Scope project` (PowerShell)을 쓰세요. 프로젝트 스코프는
-> `settings.local.json`을 사용하고, Vibekit 저장소 안에서 실행하면
-> 명시적 확인(`--yes` / `-Yes`)을 요구합니다.
+> 적용됩니다. Claude 슬래시 커맨드와 훅을 `./.claude`에만 두고 싶다면
+> `--scope project` (Bash) / `-Scope project` (PowerShell)을 쓰세요.
+> 프로젝트 스코프는 `settings.local.json`을 사용하고, Vibekit 저장소
+> 안에서 실행하면 명시적 확인(`--yes` / `-Yes`)을 요구합니다.
+>
+> **Codex 프롬프트는 항상 사용자 단위입니다.** Codex CLI는 커스텀
+> 프롬프트를 `$CODEX_HOME/prompts` (기본값 `~/.codex/prompts`)에서만
+> 읽습니다. 따라서 설치 스크립트는 `--scope` 값과 무관하게
+> `codex-prompts/*.md`를 그 경로에 복사합니다. `--scope project`는
+> Claude 쪽 설치 위치만 바꾸며, `$HOME` 하위의 Codex 프롬프트
+> 쓰기까지 막아 주지는 **않습니다**.
 
 ### 선택적 통합
 

@@ -54,6 +54,11 @@ jobs:
           VIBEKIT_SMOKE_SCOPE: project
         run: bash tests/smoke-install.sh
 
+      - name: End-to-end smoke (safe + full hook runtimes, protected branch, secret guards)
+        env:
+          CLAUDE_HOME: ${{ runner.temp }}/vibekit-claude-e2e
+        run: bash tests/smoke.sh
+
   windows-smoke:
     runs-on: windows-latest
     steps:
@@ -107,3 +112,9 @@ jobs:
         run: |
           $env:CLAUDE_HOME = Join-Path $env:RUNNER_TEMP 'vibekit-claude-project'
           .\tests\smoke-install.ps1
+
+      - name: End-to-end smoke (safe + full hook runtimes, protected branch, secret guards)
+        shell: pwsh
+        run: |
+          $env:CLAUDE_HOME = Join-Path $env:RUNNER_TEMP 'vibekit-claude-e2e'
+          .\tests\smoke.ps1

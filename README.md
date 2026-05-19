@@ -214,10 +214,17 @@ flowchart LR
 
 > **Global vs project scope.** Hooks installed in `safe` or `full` live in
 > `~/.claude` and apply to **every** Claude Code session on this user
-> account. To confine everything to `./.claude`, pass
+> account. To confine Claude command + hook install to `./.claude`, pass
 > `--scope project` (Bash) / `-Scope project` (PowerShell). Project scope
 > uses `settings.local.json` and requires explicit confirmation when run
 > inside the Vibekit repo itself.
+>
+> **Codex prompts are always user-level.** The Codex CLI reads custom
+> prompts only from `$CODEX_HOME/prompts` (default `~/.codex/prompts`).
+> The installer therefore copies `codex-prompts/*.md` to that path
+> regardless of `--scope`. `--scope project` only changes where Claude
+> commands and hooks land; it does **not** suppress Codex-prompt writes
+> under `$HOME`.
 
 ### Optional integrations
 
