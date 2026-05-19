@@ -22,6 +22,9 @@ INSTALL_CLAUDE=0
 BOOTSTRAP=0
 BOOTSTRAP_YES=0
 BOOTSTRAP_CODEX=0
+SCOPE="global"
+CLAUDE_HOME_ARG=""
+YES_ALL=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -31,14 +34,29 @@ while [ $# -gt 0 ]; do
     --mode=*)
       MODE="${1#*=}"; shift
       ;;
+    --scope)
+      SCOPE="${2:-}"; shift 2
+      ;;
+    --scope=*)
+      SCOPE="${1#*=}"; shift
+      ;;
+    --claude-home)
+      CLAUDE_HOME_ARG="${2:-}"; shift 2
+      ;;
+    --claude-home=*)
+      CLAUDE_HOME_ARG="${1#*=}"; shift
+      ;;
     --install-claude)
       INSTALL_CLAUDE=1; shift
       ;;
     --bootstrap)
       BOOTSTRAP=1; shift
       ;;
-    --bootstrap-yes|--yes)
-      BOOTSTRAP=1; BOOTSTRAP_YES=1; shift
+    --bootstrap-yes)
+      BOOTSTRAP=1; BOOTSTRAP_YES=1; YES_ALL=1; shift
+      ;;
+    --yes|-y)
+      BOOTSTRAP_YES=1; YES_ALL=1; shift
       ;;
     --bootstrap-codex)
       BOOTSTRAP_CODEX=1; shift
@@ -48,7 +66,8 @@ while [ $# -gt 0 ]; do
 Claude-Codex Vibekit installer
 
 Usage:
-  $0 --mode <commands-only|safe|full> [--bootstrap [--yes] [--bootstrap-codex]]
+  $0 --mode <commands-only|safe|full> [--scope <global|project>]
+     [--claude-home <path>] [--bootstrap [--yes] [--bootstrap-codex]]
 
 Modes:
   commands-only  Copy slash commands only. No hooks. No settings.json changes.
@@ -57,11 +76,20 @@ Modes:
                  Auto-save / auto-commit hook is NOT enabled.
   full           safe + enable auto-save / auto-commit hook. Power-user mode.
 
+Scope:
+  global   (default) install into \$CLAUDE_HOME or \$HOME/.claude. Affects all
+           Claude Code sessions on this account.
+  project  install into ./.claude under the current directory. Only that
+           project's Claude Code session is affected. Recommended for cautious
+           users and teams.
+
 Flags:
+  --claude-home <path>  Explicit Claude home directory. Overrides --scope path.
   --bootstrap        Opt-in: attempt safe automatic install of supported
                      external deps (gstack). Prints guidance for the rest
                      (BMAD, superpowers, compound-engineering).
-  --yes              Non-interactive bootstrap (implies --bootstrap).
+  --yes, -y          Non-interactive (auto-confirm prompts, including scope=project
+                     inside the vibekit repo).
   --bootstrap-codex  Also attempt 'npm install -g @openai/codex'.
   --install-claude   Reserved. Currently prints guidance only.
   -h, --help         Show this help.
@@ -89,14 +117,47 @@ case "$MODE" in
     ;;
 esac
 
-echo -e "\n${CYAN}=== Claude-Codex Vibekit Installer (mode: $MODE) ===${NC}"
+case "$SCOPE" in
+  global|project) ;;
+  *)
+    echo -e "${RED}error:${NC} unknown scope '$SCOPE'. Use global or project." >&2
+    exit 2
+    ;;
+esac
 
-CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CWD="$(pwd)"
+
+# Resolve CLAUDE_HOME. Precedence: --claude-home > scope=project > env CLAUDE_HOME > $HOME/.claude.
+if [ -n "$CLAUDE_HOME_ARG" ]; then
+  CLAUDE_HOME="$CLAUDE_HOME_ARG"
+elif [ "$SCOPE" = "project" ]; then
+  CLAUDE_HOME="$CWD/.claude"
+else
+  CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
+fi
+
+echo -e "\n${CYAN}=== Claude-Codex Vibekit Installer (mode: $MODE, scope: $SCOPE) ===${NC}"
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 
 echo -e "  ${GRAY}home:        $HOME${NC}"
 echo -e "  ${GRAY}claude_home: $CLAUDE_HOME${NC}"
+echo -e "  ${GRAY}codex_home:  $CODEX_HOME${NC}"
 echo -e "  ${GRAY}repo_root:   $REPO_ROOT${NC}"
+echo -e "  ${GRAY}cwd:         $CWD${NC}"
+
+# Project-scope safety: if installing into the vibekit repo itself, require
+# explicit confirmation. The kit's own .claude/ is the source of truth for
+# commands and hooks; an unintended in-place install can churn or shadow it.
+if [ "$SCOPE" = "project" ] && [ "$CWD" = "$REPO_ROOT" ]; then
+  echo -e "${YELLOW}warning:${NC} project-scope install inside the Vibekit repo will modify"
+  echo -e "         $REPO_ROOT/.claude (the kit's own source directory)."
+  if [ "$YES_ALL" -ne 1 ]; then
+    printf "Continue? [y/N] "
+    read -r _ans
+    case "$_ans" in y|Y|yes|YES) ;; *) echo "aborted"; exit 1 ;; esac
+  fi
+fi
 
 # Pick interpreters for JSON merging and hook registration.
 PYTHON_BIN=""
@@ -121,13 +182,46 @@ done
 
 # ---------- 2. Slash commands ----------
 echo -e "\n[2] Installing slash commands..."
+# When scope=project inside the vibekit repo, source and destination resolve
+# to the same path. Skip self-copy rather than error.
+same_path() {
+  # Portable enough: compare absolute paths via cd ... && pwd -P.
+  a="$(cd "$(dirname "$1")" 2>/dev/null && printf '%s/%s' "$(pwd -P)" "$(basename "$1")")" || a=""
+  b="$(cd "$(dirname "$2")" 2>/dev/null && printf '%s/%s' "$(pwd -P)" "$(basename "$2")")" || b=""
+  [ -n "$a" ] && [ "$a" = "$b" ]
+}
 for src in "$REPO_ROOT/.claude/commands/"*.md; do
   [ -f "$src" ] || continue
   base="$(basename "$src")"
   dst="$CLAUDE_HOME/commands/$base"
+  if same_path "$src" "$dst"; then
+    echo -e "  ${GRAY}skip  ${NC} $dst (same file)"
+    continue
+  fi
   cp -f "$src" "$dst"
   echo -e "  ${GREEN}copied${NC} $dst"
 done
+
+# ---------- 2b. Codex custom prompts ----------
+# Codex (CLI and Windows app) reads custom prompts from $CODEX_HOME/prompts.
+# This is always user-level; --scope project does not apply to Codex.
+echo -e "\n[2b] Installing Codex custom prompts into $CODEX_HOME/prompts ..."
+mkdir -p "$CODEX_HOME/prompts"
+if [ -d "$REPO_ROOT/codex-prompts" ]; then
+  for src in "$REPO_ROOT/codex-prompts/"*.md; do
+    [ -f "$src" ] || continue
+    base="$(basename "$src")"
+    dst="$CODEX_HOME/prompts/$base"
+    if same_path "$src" "$dst"; then
+      echo -e "  ${GRAY}skip  ${NC} $dst (same file)"
+      continue
+    fi
+    cp -f "$src" "$dst"
+    echo -e "  ${GREEN}copied${NC} $dst"
+  done
+else
+  echo -e "  ${GRAY}skipped (no codex-prompts/ in repo)${NC}"
+fi
 
 if [ "$MODE" = "commands-only" ]; then
   echo -e "\n[3] Mode is commands-only: skipping hooks and settings.json."
@@ -144,16 +238,26 @@ for src in "$REPO_ROOT/.claude/hooks/"*; do
   [ -f "$src" ] || continue
   base="$(basename "$src")"
   dst="$CLAUDE_HOME/hooks/$base"
-  cp -f "$src" "$dst"
-  case "$base" in
-    *.sh|*.py) chmod +x "$dst" 2>/dev/null || true ;;
-  esac
-  echo -e "  ${GREEN}copied${NC} $dst"
+  if same_path "$src" "$dst"; then
+    echo -e "  ${GRAY}skip  ${NC} $dst (same file)"
+  else
+    cp -f "$src" "$dst"
+    case "$base" in
+      *.sh|*.py) chmod +x "$dst" 2>/dev/null || true ;;
+    esac
+    echo -e "  ${GREEN}copied${NC} $dst"
+  fi
 done
 
 # ---------- 4. settings.json merge ----------
-echo -e "\n[4] Merging settings.json (mode: $MODE)..."
-SETTINGS="$CLAUDE_HOME/settings.json"
+# In project scope, prefer settings.local.json (per Claude Code convention:
+# settings.local.json is machine-local and typically gitignored).
+if [ "$SCOPE" = "project" ]; then
+  SETTINGS="$CLAUDE_HOME/settings.local.json"
+else
+  SETTINGS="$CLAUDE_HOME/settings.json"
+fi
+echo -e "\n[4] Merging $SETTINGS (mode: $MODE)..."
 
 if [ -z "$PYTHON_BIN" ]; then
   echo -e "  ${RED}error:${NC} python is required to merge settings.json safely. Install Python 3."
@@ -264,6 +368,158 @@ else:
     print("  no changes needed (hooks already present)")
 PYEOF
 
+# ---------- 4.5 Verify installed hooks ----------
+# Post-copy verification. "Copied" is not the same as "verified": OS security
+# tools (Gatekeeper quarantine on macOS, Defender on Windows, SELinux) can
+# silently quarantine or block hooks even after a successful cp. We can't
+# fully control those, but we can check that the files exist, the primary
+# Python hook compiles and runs the expected behavior, and that settings.json
+# references point to real files. If any of those fail, refuse to claim a
+# successful install.
+echo -e "\n[4.5] Verifying installed hooks (post-copy runtime smoke)..."
+
+verify_fail=0
+verify_warn=0
+
+require_file() {
+  if [ -f "$1" ]; then
+    echo -e "  ${GREEN}ok ${NC} file present: $1"
+  else
+    echo -e "  ${RED}!! ${NC} missing: $1"
+    verify_fail=$((verify_fail+1))
+  fi
+}
+
+# 1) Required hook files exist.
+require_file "$CLAUDE_HOME/hooks/block-dangerous-git.py"
+require_file "$CLAUDE_HOME/hooks/session-start.sh"
+if [ "$ENABLE_AUTOSAVE" = "1" ]; then
+  require_file "$CLAUDE_HOME/hooks/auto-save.sh"
+  require_file "$CLAUDE_HOME/hooks/auto-save-payload.py"
+fi
+
+# 2) Python hooks must compile.
+if [ -n "$PYTHON_BIN" ]; then
+  for py in "$CLAUDE_HOME/hooks/block-dangerous-git.py" \
+            "$CLAUDE_HOME/hooks/auto-save-payload.py"; do
+    [ -f "$py" ] || continue
+    if "$PYTHON_BIN" -m py_compile "$py" >/dev/null 2>&1; then
+      echo -e "  ${GREEN}ok ${NC} py_compile: $(basename "$py")"
+    else
+      echo -e "  ${RED}!! ${NC} py_compile failed: $py"
+      verify_fail=$((verify_fail+1))
+    fi
+  done
+else
+  echo -e "  ${YELLOW}-- ${NC} skipped py_compile (python not found)"
+  verify_fail=$((verify_fail+1))
+fi
+
+# 3) Shell hook syntax check where bash is available.
+if command -v bash >/dev/null 2>&1; then
+  for sh in "$CLAUDE_HOME/hooks/session-start.sh" \
+            "$CLAUDE_HOME/hooks/auto-save.sh"; do
+    [ -f "$sh" ] || continue
+    if bash -n "$sh" 2>/dev/null; then
+      echo -e "  ${GREEN}ok ${NC} bash -n: $(basename "$sh")"
+    else
+      echo -e "  ${RED}!! ${NC} bash -n failed: $sh"
+      verify_fail=$((verify_fail+1))
+    fi
+  done
+else
+  echo -e "  ${YELLOW}-- ${NC} bash not available; skipped shell syntax checks (warning, not failure)"
+  verify_warn=$((verify_warn+1))
+fi
+
+# 4) Runtime smoke test for block-dangerous-git.py.
+hook_smoke() {
+  # $1 = JSON payload, $2 = expected exit code (0 allow, 2 block), $3 = label
+  local payload="$1" expected="$2" label="$3"
+  local actual=0
+  printf '%s' "$payload" | "$PYTHON_BIN" "$CLAUDE_HOME/hooks/block-dangerous-git.py" >/dev/null 2>&1 || actual=$?
+  if [ "$actual" = "$expected" ]; then
+    echo -e "  ${GREEN}ok ${NC} smoke: $label (exit $actual)"
+  else
+    echo -e "  ${RED}!! ${NC} smoke: $label expected exit $expected, got $actual"
+    verify_fail=$((verify_fail+1))
+  fi
+}
+if [ -n "$PYTHON_BIN" ] && [ -f "$CLAUDE_HOME/hooks/block-dangerous-git.py" ]; then
+  # The hook reads current branch from git rev-parse; override to a feature
+  # branch so commit-on-protected logic doesn't fire on the harmless case.
+  VIBEKIT_HOOK_TEST_BRANCH="feature/install-smoke" \
+    hook_smoke '{"tool_input":{"command":"git status --short"}}'     0 "harmless git status allowed"
+  VIBEKIT_HOOK_TEST_BRANCH="feature/install-smoke" \
+    hook_smoke '{"tool_input":{"command":"git push --force"}}'       2 "dangerous push blocked"
+fi
+
+# 5) settings.json hook command paths must point to real files on disk.
+if [ -f "$SETTINGS" ] && [ -n "$PYTHON_BIN" ]; then
+  PATH_CHECK=$("$PYTHON_BIN" - "$SETTINGS" <<'PYEOF'
+import json, os, shlex, shutil, sys
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as f:
+        data = json.load(f)
+except Exception as e:
+    print(f"PARSE_ERROR:{e}")
+    sys.exit(0)
+hooks = (data.get("hooks") or {})
+issues = []
+checked = 0
+for event, entries in hooks.items():
+    for entry in (entries or []):
+        for h in (entry.get("hooks") or []):
+            cmd = h.get("command", "")
+            try:
+                parts = shlex.split(cmd, posix=True)
+            except ValueError:
+                issues.append(f"{event}:{cmd} -> could not parse command")
+                continue
+            if not parts:
+                continue
+            checked += 1
+            runtime = parts[0]
+            if not (os.path.exists(runtime) or shutil.which(runtime)):
+                issues.append(f"{event}:{cmd} -> runtime missing: {runtime}")
+            if len(parts) > 1 and not os.path.isfile(parts[1]):
+                issues.append(f"{event}:{cmd} -> hook file missing: {parts[1]}")
+print(f"CHECKED:{checked}")
+for i in issues:
+    print(f"ISSUE:{i}")
+PYEOF
+)
+  while IFS= read -r line; do
+    case "$line" in
+      CHECKED:*)
+        echo -e "  ${GREEN}ok ${NC} settings hook paths checked (${line#CHECKED:})"
+        ;;
+      ISSUE:*)
+        echo -e "  ${RED}!! ${NC} ${line#ISSUE:}"
+        verify_fail=$((verify_fail+1))
+        ;;
+      PARSE_ERROR:*)
+        echo -e "  ${RED}!! ${NC} settings parse error: ${line#PARSE_ERROR:}"
+        verify_fail=$((verify_fail+1))
+        ;;
+    esac
+  done <<< "$PATH_CHECK"
+fi
+
+if [ "$verify_fail" -gt 0 ]; then
+  echo -e "\n${RED}error:${NC} hook verification failed ($verify_fail issue(s))."
+  echo -e "${YELLOW}The files were copied, but at least one hook did not pass runtime verification.${NC}"
+  echo -e "${YELLOW}Do not assume hooks are active. Suggested next steps:${NC}"
+  echo -e "  - rerun: ./doctor.sh --scope $SCOPE"
+  echo -e "  - macOS: check for Gatekeeper quarantine: xattr -l $CLAUDE_HOME/hooks/*"
+  echo -e "  - Windows: check Defender / antivirus quarantine of $CLAUDE_HOME\\hooks"
+  echo -e "  - Linux: check SELinux/AppArmor logs if applicable"
+  exit 1
+fi
+if [ "$verify_warn" -gt 0 ]; then
+  echo -e "  ${YELLOW}-- ${NC} verification completed with $verify_warn warning(s) (non-fatal)"
+fi
+
 # ---------- 5. Dependency report ----------
 echo -e "\n[5] Checking optional integrations (informational only)..."
 
@@ -298,14 +554,6 @@ if [ "$BOOTSTRAP" -eq 1 ]; then
   BS_MANUAL=()
   BS_FAIL=()
 
-  confirm() {
-    # $1 = prompt
-    if [ "$BOOTSTRAP_YES" -eq 1 ]; then return 0; fi
-    printf "  %s [y/N] " "$1"
-    read -r _a
-    case "$_a" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
-  }
-
   clone_with_timeout() {
     # $1 = destination directory
     if command -v timeout >/dev/null 2>&1; then
@@ -313,6 +561,14 @@ if [ "$BOOTSTRAP" -eq 1 ]; then
     else
       git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git "$1"
     fi
+  }
+
+  confirm() {
+    # $1 = prompt
+    if [ "$BOOTSTRAP_YES" -eq 1 ]; then return 0; fi
+    printf "  %s [y/N] " "$1"
+    read -r _a
+    case "$_a" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
   }
 
   # --- gstack ---
