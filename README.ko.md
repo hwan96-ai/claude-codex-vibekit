@@ -107,14 +107,18 @@ SUMMARY.md 작성됨
 네 게이트의 전체 예시 흐름은 [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md)를
 참고하세요.
 
-## 현재 릴리스 검증 (v0.2.4)
+## 릴리스 후보 검증 (v0.2.5)
 
 <p align="center">
   <img src="docs/assets/doctor-ready.svg" alt="doctor.sh 터미널 출력: READY, commands ok, hooks verified, optional integrations partial" width="520">
 </p>
 
-아래는 이 저장소의 v0.2.4 태그에 대해 통과한 체크입니다. 특정 릴리스에
-대한 사실이고, 앞으로의 모든 버전에 대한 일반적 주장이 아닙니다:
+아래는 이 저장소의 **v0.2.5 릴리스 후보** (PR #11 / #12 머지 후의
+`main` 브랜치, 커밋 `0b3bc4c`)에 대해 통과한 체크입니다. **아직
+`v0.2.5` 태그는 만들어지지 않았습니다** — 현재 최신 태그는 여전히
+`v0.2.4`입니다. 태그가 생성되면 이 섹션은 "현재 릴리스 검증"으로
+승격됩니다. 아래 항목들은 이 후보에 대한 사실이고, 앞으로의 모든
+버전에 대한 일반적 주장이 아닙니다:
 
 - 새 클론 + `--mode safe` 설치가 깨끗한 계정에서 오류 없이 완료됩니다.
 - `doctor`의 훅 런타임 검증이 통과합니다 (Python 훅 컴파일,
@@ -122,7 +126,10 @@ SUMMARY.md 작성됨
   `settings.json` 안의 모든 훅 경로가 실재 파일을 가리킴).
 - `bash scripts/generate-checksums.sh --check` 와
   `.\scripts\generate-checksums.ps1 -Check` 모두 `SHA256SUMS`에 대해 성공.
-- Ubuntu / Windows CI 스모크 테스트 통과.
+- Ubuntu / Windows CI 스모크 테스트 통과. PR #11에서 추가된 end-to-end
+  `tests/smoke.sh` / `tests/smoke.ps1` 단계도 포함됩니다.
+- `tests/test-auto-save.sh`, `tests/test-block-dangerous-git.py` 로컬
+  실행 모두 통과 — PR #12의 훅 안전성 강화가 적용됨.
 
 이 체크들은 설치된 키트와 릴리스 파일에 대한 것이지, 게이트를 당신의 코드에
 돌리면 모든 버그를 잡아준다는 약속이 아닙니다.
