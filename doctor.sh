@@ -319,8 +319,15 @@ for event, entries in hooks.items():
             checked += 1
             if not (os.path.exists(path) or shutil.which(path)):
                 issues.append(f"{event}: {cmd} -> runtime missing: {path}")
-            if len(parts) > 1 and not os.path.isfile(parts[1]):
-                issues.append(f"{event}: {cmd} -> hook file missing: {parts[1]}")
+            hook_path = next(
+                (
+                    p for p in parts[1:]
+                    if "/hooks/" in p.replace("\\", "/")
+                ),
+                None,
+            )
+            if hook_path and not os.path.isfile(hook_path):
+                issues.append(f"{event}: {cmd} -> hook file missing: {hook_path}")
 print(f"CHECKED:{checked}")
 for i in issues:
     print(f"ISSUE:{i}")
